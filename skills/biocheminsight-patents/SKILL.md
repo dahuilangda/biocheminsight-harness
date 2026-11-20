@@ -1,69 +1,41 @@
 ---
 name: biocheminsight-patents
-description: Parse patent and literature compound data (structures, sequences, assays) with BioChemInsight. Use when the user asks to parse, extract or analyze WO/US/EP patent documents, journal articles, peptide notations, structure-activity data or build extraction reports.
+description: Parse patent and literature compound data (structures, peptide sequences, structure-activity tables) with BioChemInsight. Use when the user asks to parse, extract or analyze WO/US/EP patent documents, journal articles, peptide notations, structure-activity data, potency tables or build extraction reports. Tiered: batch server mode, agent perception mode, and full SAR analysis.
 ---
 
 # BioChemInsight patent and literature parsing
 
-Parse compound data out of patent and literature PDFs. Two modes:
+Parse compound data out of patent and literature PDFs. Deterministic
+chemistry (notation parsing, evidence ladder, mass arbitration) runs without
+any model; perception steps (deciding what a page contains) are answered by
+you out of your own context — no model keys are configured anywhere.
 
-- **server mode**: a BioChemInsight deployment runs the heavy pipeline
-  (layout detection, OCSR models). Use when `BIOCHEMINSIGHT_URL` is
-  reachable.
-- **agent mode**: you are the perception layer. The harness renders pages,
-  you read them and answer structured questions; deterministic chemistry
-  (notation parsing, evidence ladder, mass arbitration) runs in-process.
+## Choose the level
 
-## Server mode (batch, one PDF end to end)
+| request | level | doc |
+|---|---|---|
+| "解析这篇专利/文章" (one PDF, end to end, deployment available) | L1 | `levels/L1-document-parse.md` |
+| "我自己来看页面/不要用配置的模型" or no deployment | L2 | `levels/L2-agent-perception.md` |
+| "给我 SAR 分析/逐行验证/结构+活性+肽序列的完整报告" | L3 | `levels/L3-sar-analysis.md` |
 
-1. `upload_pdf(path)` -> pdf_id.
-2. `start_full_pipeline(pdf_id)` -> task_id.
-3. Poll `task_status(task_id)` until completed or failed.
-4. `download_task_result(task_id, dest)`; the zip contains structures.csv,
-   assay rows, merged.csv and the audit.
-5. `build_extraction_report(task_dir, report.md)` and read it to the user.
+Read only the level file you need. L2 and L3 assume L1's server setup
+(`upload_pdf`, task lifecycle) unless no deployment is reachable.
 
-## Agent mode (you are the model)
+## Tools by level
 
-Structure page discovery:
+- **L1** — `upload_pdf`, `start_full_pipeline`, `task_status`,
+  `download_task_result`, `build_extraction_report`.
+- **L2** — `render_pages`, `render_page`, `ocr_pages`,
+  `record_structure_detection`, `record_measurement_discovery`,
+  `record_assay_reconciliation`.
+- **L3** — `parse_peptide_notation`, `resolve_peptide_notation`,
+  `peptide_fragment_forms`, `mass_arbitration`, plus every L2 tool and the
+  report contract in `references/report-format.md`.
 
-1. `render_pages(pdf, [1..N], sheet.png)` — one contact sheet per dozen pages.
-2. Look at the sheet. For every panel decide `page`, `has_structure`,
-   `confidence`, `reason`. A rotated dense table with SMILES/notation cells
-   counts as a structure page.
-3. `record_structure_detection(out, decisions)`.
+## Hard rules (all levels)
 
-Measurement discovery:
-
-1. `render_pages(pdf, candidates, sheet.png)` per batch.
-2. Decide `page`, `has_assay_data`, `assay_names`, `confidence`, `reason`
-   for each panel. Assay tables report measured values (IC50, EC50, Ki) tied
-   to compound identifiers; compound-structure tables with notations are not
-   assay data.
-3. `record_measurement_discovery(out, decisions)`.
-
-Assay-name reconciliation:
-
-1. Collect the candidate assay names and the OCR'd source context
-   (`ocr_pages`).
-2. Decide per candidate: `merge`, `drop` or `rename`, with evidence.
-3. `record_assay_reconciliation(out, decisions)`.
-
-## Peptide rows (deterministic, no model involved)
-
-- `parse_peptide_notation(notation)` — tokens and terminal markers.
-- `resolve_peptide_notation(notation, declared_mass, form, seq_id)` — the
-  evidence ladder plus dual-convention mass arbitration. Report `ok`,
-  `delta`, `unknown` tokens and `gaps` verbatim; an unknown token is a
-  finding, never something to guess.
-- `peptide_fragment_forms(smiles)` — backbone and cap forms.
-- `mass_arbitration(smiles, declared_mass)` — standalone mass check.
-
-## Rules
-
-- Report `gaps` and `unknown` tokens to the user verbatim. Never guess a
-  residue, a name or a mass from a garbled reading.
-- A failed perception step is retried once at higher resolution
-  (`render_page` with a bigger dpi on the single page); a second failure is
-  a finding, not something to paper over.
+- A failed or unknown reading is a **named gap**: report it verbatim with
+  its page. Never guess a residue token, a compound id or a value.
 - Cite page numbers for every extracted row.
+- Retry a perception step once at higher resolution (`render_page`, bigger
+  dpi). A second failure is reported, never papered over.

@@ -5,13 +5,76 @@ import json
 from pathlib import Path
 from typing import Any
 
-from . import chemistry, decisions, ocr, pages, report
+from . import chemistry
+from . import decisions as decisions_mod
+from . import ocr as ocr_mod
+from . import pages as pages_mod
+from . import report
+
+import httpx
+from .config import harness_url
 
 
 def create_server():
     from mcp.server.fastmcp import FastMCP
 
     mcp = FastMCP("biocheminsight-harness")
+
+    @mcp.tool()
+    def measurement_review_start(source: str, out_dir: str,
+                                 max_revisions: int = 1) -> dict:
+        """Start a measurement review session: returns the first model-style
+        prompt. Answer it as the model would and feed the raw text back via
+        measurement_review_submit."""
+        base = f"{harness_url().rstrip('/')}/v1/harness/measurement-review"
+        response = httpx.post(f"{base}/start",
+                              json={"source": source,
+                                    "max_revisions": max_revisions},
+                              timeout=60.0)
+        response.raise_for_status()
+        payload = response.json()
+        session_id = payload.get("session_id")
+        state = {"session_id": session_id, "answers": []}
+        states[session_id] = state
+        prompt = payload.get("prompt")
+        if prompt:
+            path = Path(out_dir) / f"review_{session_id[:8]}_0.txt"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(prompt, ensure_ascii=False, indent=1),
+                            encoding="utf-8")
+            state["last_prompt_path"] = str(path)
+            return {"session_id": session_id, "prompt_file": str(path)}
+        return {"session_id": session_id, "done": True,
+                "result": payload.get("result")}
+
+    @mcp.tool()
+    def measurement_review_submit(session_id: str, answer_file: str,
+                                  out_dir: str) -> dict:
+        """Submit the answered prompt file (raw model-style text); returns
+        the next prompt file or the final review result."""
+        state = states.get(session_id)
+        if state is None:
+            state = {"session_id": session_id, "answers": []}
+            states[session_id] = state
+        answer = Path(answer_file).read_text(encoding="utf-8")
+        state.setdefault("answers", []).append(answer)
+        base = f"{harness_url().rstrip('/')}/v1/harness/measurement-review"
+        response = httpx.post(f"{base}/{session_id}/submit",
+                              json={"answer": answer}, timeout=120.0)
+        response.raise_for_status()
+        payload = response.json()
+        prompt = payload.get("prompt")
+        index = len(state["answers"])
+        if prompt:
+            path = Path(out_dir) / f"review_{session_id[:8]}_{index}.txt"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(prompt, ensure_ascii=False, indent=1),
+                            encoding="utf-8")
+            state["last_prompt_path"] = str(path)
+            return {"session_id": session_id, "next_prompt_file": str(path)}
+        return {"done": True, "result": payload.get("result")}
+
+    states: dict[str, dict] = {}
 
     @mcp.tool()
     def parse_peptide_notation(notation: str) -> dict:
@@ -33,28 +96,28 @@ def create_server():
     def mass_arbitration(smiles: str, declared_mass: float,
                          tolerance: float = 0.8) -> dict:
         """Dual-convention (exact or average) mass check for a reading."""
-        return chemistry.mass_verdict(smiles, declared_mass, tolerance)
+        return chemistry.mass_arbitration(smiles, declared_mass, tolerance)
 
     @mcp.tool()
-    def render_pages(pdf_path: str, pages: list[int], out_path: str,
+    def render_pages(pdf_path: str, page_numbers: list[int], out_path: str,
                      columns: int = 4, thumb_width: int = 320) -> str:
         """Render pages onto one contact-sheet image; look at it to decide
         what each page contains."""
-        out = pages.render_contact_sheet(pdf_path, pages, out_path, columns,
-                                         thumb_width)
+        out = pages_mod.render_contact_sheet(pdf_path, page_numbers,
+                                             out_path, columns, thumb_width)
         return str(out)
 
     @mcp.tool()
     def render_page(pdf_path: str, page: int, out_path: str,
                     dpi: int = 150) -> str:
         """Render one page at reading resolution."""
-        return str(pages.render_page(pdf_path, page, out_path, dpi))
+        return str(pages_mod.render_page(pdf_path, page, out_path, dpi))
 
     @mcp.tool()
     def record_structure_detection(out_path: str, decisions: list[dict]) -> dict:
         """Validate and store per-page structure decisions answered by the
         agent from a contact sheet. Returns the detected page numbers."""
-        model = decisions.record_structure_detection(
+        model = decisions_mod.record_structure_detection(
             out_path, {"decisions": decisions})
         return {"detected_pages": model.detected_pages(),
                 "pages": len(model.decisions)}
@@ -63,7 +126,7 @@ def create_server():
     def record_measurement_discovery(out_path: str, decisions: list[dict]) -> dict:
         """Validate and store per-page measurement-evidence answers. Returns
         selected pages, failed pages and discovered assay names."""
-        model = decisions.record_measurement_discovery(
+        model = decisions_mod.record_measurement_discovery(
             out_path, {"decisions": decisions})
         return {"selected_pages": model.selected_pages(),
                 "failed_pages": model.failed_pages(),
@@ -72,7 +135,7 @@ def create_server():
     @mcp.tool()
     def record_assay_reconciliation(out_path: str, decisions: list[dict]) -> dict:
         """Validate and store assay-name reconciliation actions."""
-        model = decisions.record_assay_reconciliation(
+        model = decisions_mod.record_assay_reconciliation(
             out_path, {"decisions": decisions})
         return {"decisions": len(model.decisions)}
 
@@ -81,7 +144,7 @@ def create_server():
                   lang: str = "en") -> str:
         """OCR pages through the paddle VL-1.6 service; returns the markdown
         file path."""
-        client = ocr.OcrClient()
+        client = ocr_mod.OcrClient()
         markdowns = client.pages_markdown(pdf_path, pages, lang)
         out = Path(out_path)
         out.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,7 @@
 """Serial-admission OCR client for the paddle VL-1.6 service."""
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,9 @@ class OcrClient:
 
     def _chunk_markdown(self, pdf_path: str | Path, chunk: list[int],
                         lang: str) -> dict[int, str]:
+        """The service is an async job API: submit, poll until the job
+        leaves the running state, fetch the result. Returned page numbers
+        carry a service-side offset, so pages map back by sorted order."""
         with open(pdf_path, "rb") as handle:
             response = httpx.post(
                 f"{self.base_url}/v1/pdf-to-markdown",
@@ -44,11 +48,29 @@ class OcrClient:
                 timeout=self.timeout,
             )
         response.raise_for_status()
-        payload = response.json()
-        pages = payload.get("pages") or []
+        job = response.json()
+        job_id = job.get("job_id")
+        if not job_id:
+            raise RuntimeError(f"paddle submit returned no job id: {job}")
+        deadline = time.monotonic() + self.timeout
+        while time.monotonic() < deadline:
+            status = httpx.get(f"{self.base_url}/v1/jobs/{job_id}",
+                               timeout=30.0).json()
+            state = str(status.get("status") or "").lower()
+            if state == "completed":
+                break
+            if state == "failed":
+                raise RuntimeError(f"paddle job {job_id} failed")
+            time.sleep(2.0)
+        else:
+            raise TimeoutError(f"paddle job {job_id} timed out")
+        result = httpx.get(f"{self.base_url}/v1/jobs/{job_id}/result",
+                           timeout=60.0).json()
+        pages = result.get("pages") or []
+        ordered = sorted(chunk)
         out: dict[int, str] = {}
-        for item in pages:
-            page_number = int(item.get("page_number") or 0)
-            if page_number in chunk:
-                out[page_number] = str(item.get("markdown") or "")
+        for position, item in enumerate(
+                sorted(pages, key=lambda item: int(item.get("page_number") or 0))):
+            if position < len(ordered):
+                out[ordered[position]] = str(item.get("markdown") or "")
         return out
