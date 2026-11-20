@@ -1,0 +1,93 @@
+"""Client for a running BioChemInsight deployment (server mode)."""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+from .config import biocheminsight_url
+
+
+class BioChemInsightClient:
+    def __init__(self, base_url: str | None = None, timeout: float = 60.0,
+                 http: httpx.Client | None = None):
+        self.base_url = (base_url or biocheminsight_url()).rstrip("/")
+        self.timeout = timeout
+        self.http = http or httpx.Client(timeout=timeout)
+
+    def upload_pdf(self, path: str | Path) -> str:
+        with open(path, "rb") as handle:
+            response = self.http.post(f"{self.base_url}/api/pdfs",
+                                      files={"file": handle},
+                                      timeout=self.timeout * 4)
+        response.raise_for_status()
+        return response.json()["pdf_id"]
+
+    def start_full_pipeline(self, pdf_id: str,
+                            structure_filter_strictness: str = "strict",
+                            assemble_markush: bool = True,
+                            lang: str = "en") -> str:
+        response = self.http.post(
+            f"{self.base_url}/api/tasks/full-pipeline",
+            json={"pdf_id": pdf_id,
+                  "structure_filter_strictness": structure_filter_strictness,
+                  "assemble_markush": assemble_markush,
+                  "lang": lang},
+        )
+        response.raise_for_status()
+        return response.json()["task_id"]
+
+    def start_structure_extraction(self, pdf_id: str,
+                                   pages: list[int] | None = None) -> str:
+        payload: dict[str, Any] = {"pdf_id": pdf_id}
+        if pages:
+            payload["structure_pages"] = pages
+        response = self.http.post(f"{self.base_url}/api/tasks/structures",
+                                  json=payload)
+        response.raise_for_status()
+        return response.json()["task_id"]
+
+    def start_assay_extraction(self, pdf_id: str,
+                               pages: list[int] | None = None,
+                               assay_names: list[str] | None = None) -> str:
+        payload: dict[str, Any] = {"pdf_id": pdf_id}
+        if pages:
+            payload["assay_pages"] = pages
+        if assay_names:
+            payload["assay_names"] = assay_names
+        response = self.http.post(f"{self.base_url}/api/tasks/assays",
+                                  json=payload)
+        response.raise_for_status()
+        return response.json()["task_id"]
+
+    def task(self, task_id: str) -> dict[str, Any]:
+        response = self.http.get(f"{self.base_url}/api/tasks/{task_id}")
+        response.raise_for_status()
+        return response.json()
+
+    def wait_for_task(self, task_id: str, poll_seconds: float = 10.0,
+                      timeout_seconds: float = 4 * 3600.0) -> dict[str, Any]:
+        import time
+
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            task = self.task(task_id)
+            status = str(task.get("status") or "").lower()
+            if status in {"completed", "failed", "canceled"}:
+                return task
+            time.sleep(poll_seconds)
+        raise TimeoutError(f"task {task_id} did not finish in {timeout_seconds}s")
+
+    def download_result(self, task_id: str, dest: str | Path) -> Path:
+        dest = Path(dest)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with self.http.stream(
+            "GET", f"{self.base_url}/api/tasks/{task_id}/download",
+            timeout=self.timeout * 4,
+        ) as response:
+            response.raise_for_status()
+            with open(dest, "wb") as handle:
+                for chunk in response.iter_bytes():
+                    handle.write(chunk)
+        return dest
