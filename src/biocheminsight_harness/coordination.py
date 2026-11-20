@@ -76,14 +76,18 @@ class BatchLedger:
 
     def complete(self, worker: str, batch_id: str, result_path: str | Path,
                  stats: dict[str, Any] | None = None) -> None:
+        records_dir = self.results_dir / "records"
+        records_dir.mkdir(parents=True, exist_ok=True)
         record = {"batch_id": batch_id, "worker": worker,
                   "result": Path(result_path).name, "stats": stats or {}}
-        (self.results_dir / f"{batch_id}.{worker}.json").write_text(
+        (records_dir / f"{batch_id}.{worker}.json").write_text(
             json.dumps(record, ensure_ascii=False, indent=1),
             encoding="utf-8")
 
     def fail(self, worker: str, batch_id: str, reason: str) -> None:
-        (self.results_dir / f"{batch_id}.{worker}.failed.json").write_text(
+        records_dir = self.results_dir / "records"
+        records_dir.mkdir(parents=True, exist_ok=True)
+        (records_dir / f"{batch_id}.{worker}.failed.json").write_text(
             json.dumps({"batch_id": batch_id, "worker": worker,
                         "failed": reason}, ensure_ascii=False),
             encoding="utf-8")
