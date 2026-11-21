@@ -14,7 +14,7 @@ from . import ocr as ocr_mod
 from . import pages as pages_mod
 from . import report
 from . import sar as sar_mod
-from .config import harness_url, biocheminsight_url, paddleocr_url
+from .config import biocheminsight_url, harness_url, paddleocr_url
 from . import frontend
 
 _states: dict[str, dict] = {}
@@ -24,6 +24,8 @@ def create_server():
     from mcp.server.fastmcp import FastMCP
 
     mcp = FastMCP("biocheminsight-harness")
+
+    # --- deployment configuration ---
 
     @mcp.tool()
     def configure_deployment(url: str, paddle_url: str = "",
@@ -40,42 +42,15 @@ def create_server():
     @mcp.tool()
     def deployment_status() -> dict:
         """Check connectivity to the configured BioChemInsight deployment."""
-        import httpx as _httpx
         base = biocheminsight_url().rstrip("/")
         try:
-            r = _httpx.get(f"{base}/api/tasks", timeout=5)
+            r = httpx.get(f"{base}/api/tasks", timeout=5)
             connected = r.status_code < 500
         except Exception:
             connected = False
         return {"biocheminsight_url": base, "connected": connected}
 
-    @mcp.tool()
-    def open_review_workspace(task_id: str) -> dict:
-        """Return the BioChemInsight review workspace URL for a completed
-        task. The workspace renders structures, assay tables and the merged
-        SAR view."""
-        from .frontend import review_workspace_url
-        return {"url": review_workspace_url(task_id), "task_id": task_id}
-
-    @mcp.tool()
-    def parse_peptide_notation(notation: str) -> dict:
-        return chemistry.parse_notation(notation)
-
-    @mcp.tool()
-    def resolve_peptide_notation(notation: str,
-                                 declared_mass: float | None = None,
-                                 form: str = "", seq_id: str = "") -> dict:
-        return chemistry.resolve_notation(notation, declared_mass, form,
-                                          seq_id)
-
-    @mcp.tool()
-    def peptide_fragment_forms(smiles: str) -> dict:
-        return chemistry.fragment_forms(smiles)
-
-    @mcp.tool()
-    def mass_arbitration(smiles: str, declared_mass: float,
-                         tolerance: float = 0.8) -> dict:
-        return chemistry.mass_arbitration(smiles, declared_mass, tolerance)
+    # --- perception round-trip ---
 
     @mcp.tool()
     def render_pages(pdf_path: str, page_numbers: list[int], out_path: str,
@@ -112,6 +87,8 @@ def create_server():
             out_path, {"decisions": decisions})
         return {"decisions": len(model.decisions)}
 
+    # --- OCR ---
+
     @mcp.tool()
     def ocr_pages(pdf_path: str, pages: list[int], out_path: str,
                   lang: str = "en") -> str:
@@ -122,6 +99,30 @@ def create_server():
         out.write_text(json.dumps(markdowns, ensure_ascii=False, indent=1),
                        encoding="utf-8")
         return str(out)
+
+    # --- deterministic chemistry ---
+
+    @mcp.tool()
+    def parse_peptide_notation(notation: str) -> dict:
+        return chemistry.parse_notation(notation)
+
+    @mcp.tool()
+    def resolve_peptide_notation(notation: str,
+                                 declared_mass: float | None = None,
+                                 form: str = "", seq_id: str = "") -> dict:
+        return chemistry.resolve_notation(notation, declared_mass, form,
+                                          seq_id)
+
+    @mcp.tool()
+    def peptide_fragment_forms(smiles: str) -> dict:
+        return chemistry.fragment_forms(smiles)
+
+    @mcp.tool()
+    def mass_arbitration(smiles: str, declared_mass: float,
+                         tolerance: float = 0.8) -> dict:
+        return chemistry.mass_arbitration(smiles, declared_mass, tolerance)
+
+    # --- server pipeline ---
 
     @mcp.tool()
     def upload_pdf(path: str) -> str:
@@ -149,18 +150,19 @@ def create_server():
             task_id, Path(dest_dir) / f"{task_id}.zip")
         return str(dest)
 
-    @mcp.tool()
-    def open_review_workspace(task_id: str) -> dict:
-        """Return the BioChemInsight review workspace URL for a completed
-        task. The workspace renders structures, assay tables and the merged
-        SAR view."""
-        from .frontend import review_workspace_url
-        return {"url": review_workspace_url(task_id), "task_id": task_id}
+    # --- output ---
 
     @mcp.tool()
     def build_extraction_report(task_dir: str, out_path: str,
                                 title: str = "") -> str:
         return str(report.build_report(task_dir, out_path, title))
+
+    @mcp.tool()
+    def open_review_workspace(task_id: str) -> dict:
+        from .frontend import review_workspace_url
+        return {"url": review_workspace_url(task_id), "task_id": task_id}
+
+    # --- parallel coordination ---
 
     @mcp.tool()
     def batch_partition(run_dir: str, total_pages: int,
@@ -184,6 +186,8 @@ def create_server():
     def batch_merge(results_dir: str) -> dict:
         return coord.merge_decision_files(results_dir)
 
+    # --- SAR ---
+
     @mcp.tool()
     def sar_build(structures: list[dict],
                   measurements: list[dict]) -> dict:
@@ -192,6 +196,58 @@ def create_server():
     @mcp.tool()
     def sar_analysis(sar_rows: list[dict]) -> list[str]:
         return sar_mod.sar_summary(sar_rows)
+
+    # --- measurement review session ---
+
+    @mcp.tool()
+    def measurement_review_start(source: str, out_dir: str,
+                                 max_revisions: int = 1) -> dict:
+        """Start a measurement review session. Returns the first prompt.
+        Answer it as the model would, then submit via
+        measurement_review_submit."""
+        base = f"{harness_url().rstrip('/')}/v1/harness/measurement-review"
+        response = httpx.post(f"{base}/start",
+                              json={"source": source,
+                                    "max_revisions": max_revisions},
+                              timeout=60.0)
+        response.raise_for_status()
+        payload = response.json()
+        session_id = payload.get("session_id")
+        state = {"session_id": session_id, "answers": []}
+        states[session_id] = state
+        prompt = payload.get("prompt")
+        if prompt:
+            path = Path(out_dir) / f"review_{session_id[:8]}_0.txt"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(prompt, ensure_ascii=False, indent=1),
+                            encoding="utf-8")
+            return {"session_id": session_id, "prompt_file": str(path)}
+        return {"session_id": session_id, "done": True}
+
+    @mcp.tool()
+    def measurement_review_submit(session_id: str, answer_file: str,
+                                  out_dir: str) -> dict:
+        """Submit an answered prompt file. Returns the next prompt or the
+        final result."""
+        state = states.get(session_id)
+        if state is None:
+            return {"error": "unknown session"}
+        answer = Path(answer_file).read_text(encoding="utf-8")
+        state.setdefault("answers", []).append(answer)
+        base = f"{harness_url().rstrip('/')}/v1/harness/measurement-review"
+        response = httpx.post(f"{base}/{session_id}/submit",
+                              json={"answer": answer}, timeout=120.0)
+        response.raise_for_status()
+        payload = response.json()
+        prompt = payload.get("prompt")
+        index = len(state["answers"])
+        if prompt:
+            path = Path(out_dir) / f"review_{session_id[:8]}_{index}.txt"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(prompt, ensure_ascii=False, indent=1),
+                            encoding="utf-8")
+            return {"session_id": session_id, "next_prompt_file": str(path)}
+        return {"done": True, "result": payload.get("result")}
 
     return mcp
 
