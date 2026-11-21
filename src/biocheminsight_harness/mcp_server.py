@@ -112,6 +112,25 @@ def create_server():
     # --- OCR ---
 
     @mcp.tool()
+    def record_monomer_dictionary(task_session_id: str, entries: list[dict],
+                                  output_dir: str = "") -> dict:
+        """Feed the document's own monomer definitions (code -> SMILES
+        transcribed from its definition pages) into the session's
+        codebook. Document-scoped: nothing crosses to another document;
+        entries stay candidates until mass arbitration confirms them.
+        Harvest this BEFORE run-chemistry whenever the document defines
+        custom residues."""
+        payload = {"entries": entries}
+        if output_dir:
+            payload["output_dir"] = output_dir
+        from .config import harness_url
+        r = httpx.post(
+            f"{harness_url().rstrip('/')}/v1/agent-mode/{task_session_id}/monomer-dictionary",
+            json=payload, timeout=60.0)
+        r.raise_for_status()
+        return r.json()
+
+    @mcp.tool()
     def route_pages(pdf_path: str, pages: list[int],
                     page_types: dict[str, str] | None = None) -> dict:
         """Split pages between paddle OCR and your own vision. Keys of

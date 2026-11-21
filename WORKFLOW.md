@@ -64,7 +64,26 @@ your transcription against OCR text where both exist:
 verify_extraction(readings, key_fields=["value", "unit"])
 ```
 
-## 5. Chemistry and SAR
+## 5. Chemistry and SAR — and the demand-driven codebook
+
+Run chemistry first. Read the coverage it returns: when quarantined
+rows carry `unknown_codes`, the document defines residues the parser
+does not know — harvest exactly those definitions (definition grids,
+building-block tables, abbreviation legends), render at high
+resolution, read each drawn structure, and feed the pairs:
+
+```
+record_monomer_dictionary(task_session_id, entries=[{"code": <printed>, "smiles": <your reading>}], output_dir=...)
+```
+
+then run chemistry again. No unknown codes means no harvest — the step
+is driven by what the document needs, not by ritual. Rules: codes
+verbatim as printed; SMILES from what is actually drawn (you are the
+OCSR); skip what you cannot read reliably. Entries stay candidates —
+mass arbitration decides. The codebook never crosses documents: each
+document teaches only itself. Arbitration failures carry structured
+diagnostics (per-token masses, assembled mass vs target) — use them to
+pinpoint which reading is wrong before re-reading anything.
 
 ```
 peptide_fragment_forms(smiles)
