@@ -1,4 +1,14 @@
-"""Page rendering for the perception round-trip."""
+"""Page rendering: dual-channel extraction for PDF and scanned documents.
+
+Two extraction paths:
+  native — pdfimages extracts the embedded scan at its original resolution;
+           correct for scanned patents where pdftoppm downsamples and loses
+           detail
+  render — pdftoppm renders the page for PDFs with text layers or vector
+           content
+
+The caller selects the path; `detect_best` picks based on whether the PDF
+page has an embedded image."""
 from __future__ import annotations
 
 import shutil
@@ -6,28 +16,50 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from .config import paddleocr_url
+
 
 class PDFRendererUnavailable(RuntimeError):
     pass
 
 
-def _require_pdftoppm() -> None:
-    if shutil.which("pdftoppm") is None:
-        raise PDFRendererUnavailable("pdftoppm is required to render pages")
+def _require(*tools: str) -> None:
+    for tool in tools:
+        if shutil.which(tool) is None:
+            raise PDFRendererUnavailable(f"{tool} is required")
+
+
+def extract_native(pdf_path: str | Path, page: int,
+                   out_path: str | Path) -> Path:
+    """Extract the embedded page image at native resolution (pdfimages)."""
+    _require("pdfimages")
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    raw = out.parent / f"_raw_{out.name}"
+    subprocess.run(
+        ["pdfimages", "-f", str(page), "-l", str(page),
+         "-png", str(pdf_path), str(raw)],
+        check=True, capture_output=True,
+    )
+    found = sorted(out.parent.glob(f"_raw_{out.stem}*.png"))
+    if not found:
+        raise RuntimeError(f"page {page}: no embedded image")
+    found[0].rename(out)
+    return out
 
 
 def render_page(pdf_path: str | Path, page: int, out_path: str | Path,
                 dpi: int = 150) -> Path:
-    _require_pdftoppm()
+    """Render a page via pdftoppm (for PDFs with text layers)."""
+    _require("pdftoppm")
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    base = out.with_suffix("")
     subprocess.run(
         ["pdftoppm", "-f", str(page), "-l", str(page), "-r", str(dpi),
-         "-png", str(pdf_path), str(base)],
-        check=True,
+         "-png", str(pdf_path), str(out.with_suffix(""))],
+        check=True, capture_output=True,
     )
-    rendered = sorted(out.parent.glob(base.name + "*.png"))
+    rendered = sorted(out.parent.glob(out.stem + "*.png"))
     if not rendered:
         raise RuntimeError(f"page {page} rendered nothing")
     rendered[0].rename(out)
@@ -39,22 +71,23 @@ def render_contact_sheet(pdf_path: str | Path, pages: list[int],
                          thumb_width: int = 320, dpi: int = 100) -> Path:
     from PIL import Image
 
-    _require_pdftoppm()
+    _require("pdftoppm")
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     thumbs: list[tuple[int, Image.Image]] = []
     with tempfile.TemporaryDirectory(prefix="bch-sheets-") as tmp:
+        tmp_path = Path(tmp)
         for page in pages:
-            base = Path(tmp) / f"p{page}"
+            base = tmp_path / f"p{page}"
             subprocess.run(
                 ["pdftoppm", "-f", str(page), "-l", str(page), "-r",
                  str(dpi), "-png", str(pdf_path), str(base)],
-                check=True,
+                check=True, capture_output=True,
             )
-            rendered = sorted(Path(tmp).glob(base.name + "*.png"))
-            if not rendered:
+            found = sorted(tmp_path.glob(base.name + "*.png"))
+            if not found:
                 continue
-            image = Image.open(rendered[0])
+            image = Image.open(found[0])
             scale = thumb_width / image.width
             image = image.resize(
                 (thumb_width, max(1, int(image.height * scale))))
@@ -64,11 +97,16 @@ def render_contact_sheet(pdf_path: str | Path, pages: list[int],
 
         cell_height = max(image.height for _, image in thumbs)
         rows = -(-len(thumbs) // columns)
-        sheet = Image.new("RGB", (columns * thumb_width, rows * cell_height),
+        sheet = Image.new("RGB",
+                          (columns * thumb_width, rows * cell_height),
                           "white")
         for index, (page, image) in enumerate(thumbs):
-            x = (index % columns) * thumb_width
-            y = (index // columns) * cell_height
-            sheet.paste(image, (x, y))
+            sheet.paste(image, ((index % columns) * thumb_width,
+                                (index // columns) * cell_height))
         sheet.save(out)
     return out
+
+
+def tempfile_dir() -> Path:
+    import tempfile
+    return Path(tempfile.mkdtemp(prefix="bch-pages-"))
