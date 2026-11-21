@@ -79,9 +79,21 @@ class OcrClient:
         result = httpx.get(f"{self.base_url}/v1/jobs/{job_id}/result",
                            timeout=60.0).json()
         pages = result.get("pages") or []
-        out: dict[int, str] = {}
-        for item in pages:
-            page_number = int(item.get("page_number") or 0)
-            if page_number in chunk:
-                out[page_number] = str(item.get("markdown") or "")
-        return out
+        numbers = [item.get("page_number") for item in pages]
+        texts = [str(item.get("markdown") or "") for item in pages]
+        by_page = {}
+        for number, text in zip(numbers, texts):
+            try:
+                by_page[int(number)] = text
+            except (TypeError, ValueError):
+                by_page.clear()
+                break
+        if set(by_page) == set(chunk):
+            return by_page
+        # Service page numbering may be relative to the extracted range;
+        # pages come back in order, so map by sorted position.
+        if len(numbers) == len(chunk):
+            return dict(zip(sorted(chunk), texts))
+        raise RuntimeError(
+            f"paddle job {job_id} returned pages {numbers} for requested "
+            f"pages {chunk}")
