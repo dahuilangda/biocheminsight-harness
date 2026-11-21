@@ -72,24 +72,39 @@ def build_sar_table(structures: list[dict[str, Any]],
             "assay_only": assay_only, "joined": len(sar_rows)}
 
 
-def sar_summary(sar_rows: list[dict]) -> list[str]:
+def sar_summary(sar_rows: list[dict],
+                higher_is_better: dict[str, bool] | None = None) -> dict:
+    """Rank per endpoint. Direction defaults to potency semantics (lower
+    is better); endpoints named in higher_is_better reverse it. Cutoff
+    operators travel with the value so '>10000' never ranks as 10000.
+    Values that cannot parse are returned as named gaps."""
+    directions = higher_is_better or {}
     by_endpoint: dict[str, list[tuple[float, dict]]] = {}
+    unparseable: list[dict] = []
     for row in sar_rows:
-        potency = _parse_potency(str(row.get("value", "")))
-        if potency is not None:
-            by_endpoint.setdefault(row.get("endpoint", ""), []).append(
-                (potency, row))
+        raw = str(row.get("value", ""))
+        operator = _OPERATOR_RE.match(raw)
+        potency = _parse_potency(raw)
+        endpoint = row.get("endpoint", "")
+        if potency is None:
+            if raw.strip():
+                unparseable.append({"endpoint": endpoint,
+                                    "value": raw,
+                                    "notation": row.get("notation", "")})
+            continue
+        by_endpoint.setdefault(endpoint, []).append(
+            (potency, {**row, "operator": operator.group(0).strip() if operator else ""}))
 
     lines = []
     for endpoint, entries in sorted(by_endpoint.items()):
         if len(entries) < 2:
             continue
-        entries.sort(key=lambda t: t[0])
-        best = entries[0]
-        worst = entries[-1]
+        reverse = directions.get(endpoint, False)
+        ordered = sorted(entries, key=lambda t: t[0], reverse=reverse)
+        best, worst = ordered[0], ordered[-1]
         lines.append(f"{endpoint}: {len(entries)} compounds, "
                      f"best {best[1].get('notation', '')[:40]} "
-                     f"({best[0]:.4g}), "
+                     f"({best[1].get('value', '')}), "
                      f"worst {worst[1].get('notation', '')[:40]} "
-                     f"({worst[0]:.4g})")
-    return lines
+                     f"({worst[1].get('value', '')})")
+    return {"summary": lines, "unparseable_values": unparseable}

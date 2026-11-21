@@ -17,9 +17,6 @@ from . import sar as sar_mod
 from .config import biocheminsight_url, harness_url, paddleocr_url
 from . import frontend
 
-_states: dict[str, dict] = {}
-
-
 def create_server():
     from mcp.server.fastmcp import FastMCP
 
@@ -41,14 +38,31 @@ def create_server():
 
     @mcp.tool()
     def deployment_status() -> dict:
-        """Check connectivity to the configured BioChemInsight deployment."""
+        """Check connectivity to every configured BioChemInsight endpoint:
+        pipeline API, harness chemistry, paddle OCR."""
+        def probe(url: str) -> bool:
+            try:
+                return httpx.get(url, timeout=5).is_success
+            except Exception:
+                return False
+
         base = biocheminsight_url().rstrip("/")
+        pipeline_ok = probe(f"{base}/api/tasks")
         try:
-            r = httpx.get(f"{base}/api/tasks", timeout=5)
-            connected = r.status_code < 500
+            from .config import harness_url
+            harness_ok = probe(f"{harness_url().rstrip('/')}/healthz")
         except Exception:
-            connected = False
-        return {"biocheminsight_url": base, "connected": connected}
+            harness_ok = False
+        try:
+            from .config import paddleocr_url
+            paddle_ok = probe(f"{paddleocr_url().rstrip('/')}/healthz")
+        except Exception:
+            paddle_ok = False
+        return {"biocheminsight_url": base,
+                "pipeline": pipeline_ok,
+                "harness_chemistry": harness_ok,
+                "paddle_ocr": paddle_ok,
+                "connected": pipeline_ok}
 
     # --- perception round-trip ---
 
@@ -98,6 +112,19 @@ def create_server():
     # --- OCR ---
 
     @mcp.tool()
+    def route_pages(pdf_path: str, pages: list[int],
+                    page_types: dict[str, str] | None = None) -> dict:
+        """Split pages between paddle OCR and your own vision. Keys of
+        page_types are page numbers (as strings); types in
+        {rotated_table, compound_table, dense_layout} go to vision, the
+        rest go to paddle with quality escalation back to you."""
+        from .perception import PerceptionRouter
+        types = {int(k): v for k, v in (page_types or {}).items()}
+        result = PerceptionRouter().route_pages(pdf_path, pages, types)
+        return {"markdowns": {str(k): v for k, v in result["markdowns"].items()},
+                "agent_pages": result["agent_pages"]}
+
+    @mcp.tool()
     def ocr_pages(pdf_path: str, pages: list[int], out_path: str,
                   lang: str = "en") -> str:
         client = ocr_mod.OcrClient()
@@ -117,9 +144,10 @@ def create_server():
     @mcp.tool()
     def resolve_peptide_notation(notation: str,
                                  declared_mass: float | None = None,
-                                 form: str = "", seq_id: str = "") -> dict:
+                                 form: str = "", seq_id: str = "",
+                                 smiles_reading: str = "") -> dict:
         return chemistry.resolve_notation(notation, declared_mass, form,
-                                          seq_id)
+                                          seq_id, smiles_reading)
 
     @mcp.tool()
     def peptide_fragment_forms(smiles: str) -> dict:
@@ -170,6 +198,16 @@ def create_server():
         from .frontend import review_workspace_url
         return {"url": review_workspace_url(task_id), "task_id": task_id}
 
+    @mcp.tool()
+    def task_artifact_urls(task_id: str) -> dict:
+        """Browser URLs for the finished run's structures, assays and
+        merged-relationship tables."""
+        from . import frontend
+        return {"task_id": task_id,
+                "structures": frontend.structures_url(task_id),
+                "assays": frontend.assays_url(task_id),
+                "merged": frontend.merged_url(task_id)}
+
     # --- parallel coordination ---
 
     @mcp.tool()
@@ -189,6 +227,14 @@ def create_server():
                        result_path: str) -> None:
         ledger = coord.BatchLedger(run_dir)
         ledger.complete(worker, batch_id, result_path)
+
+    @mcp.tool()
+    def batch_fail(run_dir: str, worker: str, batch_id: str,
+                   reason: str) -> None:
+        """Record the failure and release the claim so another worker can
+        take the batch."""
+        ledger = coord.BatchLedger(run_dir)
+        ledger.fail(worker, batch_id, reason)
 
     @mcp.tool()
     def batch_merge(results_dir: str) -> dict:
@@ -215,6 +261,13 @@ def create_server():
         from .verification import cross_check
         return cross_check(readings, key_fields)
 
+    @mcp.tool()
+    def verify_dual_source(notation_smiles: str, ocsr_smiles: str) -> dict:
+        """Second-source acceptance for a structure: the notation-derived
+        SMILES and the OCSR crop SMILES must agree on InChIKey."""
+        from .verification import dual_source_consistency
+        return dual_source_consistency(notation_smiles, ocsr_smiles)
+
     # --- measurement review session ---
 
     @mcp.tool()
@@ -231,8 +284,6 @@ def create_server():
         response.raise_for_status()
         payload = response.json()
         session_id = payload.get("session_id")
-        state = {"session_id": session_id, "answers": []}
-        states[session_id] = state
         prompt = payload.get("prompt")
         if prompt:
             path = Path(out_dir) / f"review_{session_id[:8]}_0.txt"
@@ -247,18 +298,15 @@ def create_server():
                                   out_dir: str) -> dict:
         """Submit an answered prompt file. Returns the next prompt or the
         final result."""
-        state = states.get(session_id)
-        if state is None:
-            return {"error": "unknown session"}
         answer = Path(answer_file).read_text(encoding="utf-8")
-        state.setdefault("answers", []).append(answer)
         base = f"{harness_url().rstrip('/')}/v1/harness/measurement-review"
         response = httpx.post(f"{base}/{session_id}/submit",
                               json={"answer": answer}, timeout=120.0)
         response.raise_for_status()
         payload = response.json()
         prompt = payload.get("prompt")
-        index = len(state["answers"])
+        prior = len(list(Path(out_dir).glob(f"review_{session_id[:8]}_*.txt")))
+        index = prior
         if prompt:
             path = Path(out_dir) / f"review_{session_id[:8]}_{index}.txt"
             path.parent.mkdir(parents=True, exist_ok=True)

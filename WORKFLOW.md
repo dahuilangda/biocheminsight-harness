@@ -15,7 +15,7 @@ deployment_status()
 Render a contact sheet, read it with your vision, and record decisions:
 
 ```
-render_pages(pdf_path, pages, out_path)     # batches of ~40 pages
+render_pages(pdf_path, pages, out_path)     # contact sheets
 record_structure_detection(out_path, decisions)
 ```
 

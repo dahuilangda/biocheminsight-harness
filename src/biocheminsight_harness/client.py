@@ -38,46 +38,13 @@ class BioChemInsightClient:
         response.raise_for_status()
         return response.json()["task_id"]
 
-    def start_structure_extraction(self, pdf_id: str,
-                                   pages: list[int] | None = None) -> str:
-        payload: dict[str, Any] = {"pdf_id": pdf_id}
-        if pages:
-            payload["structure_pages"] = pages
-        response = self.http.post(f"{self.base_url}/api/tasks/structures",
-                                  json=payload)
-        response.raise_for_status()
-        return response.json()["task_id"]
 
-    def start_assay_extraction(self, pdf_id: str,
-                               pages: list[int] | None = None,
-                               assay_names: list[str] | None = None) -> str:
-        payload: dict[str, Any] = {"pdf_id": pdf_id}
-        if pages:
-            payload["assay_pages"] = pages
-        if assay_names:
-            payload["assay_names"] = assay_names
-        response = self.http.post(f"{self.base_url}/api/tasks/assays",
-                                  json=payload)
-        response.raise_for_status()
-        return response.json()["task_id"]
 
     def task(self, task_id: str) -> dict[str, Any]:
         response = self.http.get(f"{self.base_url}/api/tasks/{task_id}")
         response.raise_for_status()
         return response.json()
 
-    def wait_for_task(self, task_id: str, poll_seconds: float = 10.0,
-                      timeout_seconds: float = 4 * 3600.0) -> dict[str, Any]:
-        import time
-
-        deadline = time.monotonic() + timeout_seconds
-        while time.monotonic() < deadline:
-            task = self.task(task_id)
-            status = str(task.get("status") or "").lower()
-            if status in {"completed", "failed", "canceled"}:
-                return task
-            time.sleep(poll_seconds)
-        raise TimeoutError(f"task {task_id} did not finish in {timeout_seconds}s")
 
     def download_result(self, task_id: str, dest: str | Path) -> Path:
         dest = Path(dest)

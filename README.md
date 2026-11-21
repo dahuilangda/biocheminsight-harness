@@ -95,10 +95,15 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 | `mass_arbitration` | dual-convention mass check |
 | `render_pages` / `render_page` | contact sheets / single pages |
 | `extract_page_images` | native chart crops for vision reading |
+| `route_pages` | paddle/vision dispatch with quality escalation |
 | `record_structure_detection` | validated page decisions |
 | `record_measurement_discovery` | assay pages and names |
 | `record_assay_reconciliation` | assay-name merge/drop/rename |
 | `verify_extraction` | cross-check independent readings |
+| `verify_dual_source` | InChIKey agreement for structure second-source |
+| `measurement_review_start` / `measurement_review_submit` | measurement review session |
+| `task_artifact_urls` | browser URLs for finished tables |
+| `batch_fail` | release a failed batch for another worker |
 | `ocr_pages` | paddle VL-1.6 markdown |
 | `upload_pdf` / `start_full_pipeline` / `task_status` / `download_task_result` | server pipeline |
 | `build_extraction_report` | markdown report |

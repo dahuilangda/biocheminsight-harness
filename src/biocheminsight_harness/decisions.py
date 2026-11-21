@@ -63,16 +63,29 @@ class AssayReconciliation(BaseModel):
     @classmethod
     def targets_must_exist(cls, value: list[ReconciliationAction]
                            ) -> list[ReconciliationAction]:
+        """Merges must land on a kept candidate with no cycles; renames
+        must name the canonical assay."""
         ids = {d.candidate_id for d in value}
+        edges = {}
         for d in value:
             if d.action == "merge" and d.canonical_candidate_id not in ids:
                 raise ValueError(
                     f"merge target {d.canonical_candidate_id} is not a candidate")
+            if d.action == "merge" and d.canonical_candidate_id == d.candidate_id:
+                raise ValueError(f"{d.candidate_id} cannot merge into itself")
+            if d.action == "rename" and not d.canonical_assay_name:
+                raise ValueError(f"rename of {d.candidate_id} needs canonical_assay_name")
+            if d.action == "merge":
+                edges[d.candidate_id] = d.canonical_candidate_id
+        for start in edges:
+            seen = set()
+            node = start
+            while node in edges and node not in seen:
+                seen.add(node)
+                node = edges[node]
+            if node in seen and node == start:
+                raise ValueError(f"merge cycle at {start}")
         return value
-
-
-def load_json(path: str | Path) -> Any:
-    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def record_structure_detection(path: str | Path, decisions: dict[str, Any]
