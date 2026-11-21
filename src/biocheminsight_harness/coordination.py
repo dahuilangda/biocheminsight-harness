@@ -13,8 +13,6 @@ from typing import Any
 
 
 class BatchLedger:
-    """Batch manifest plus atomic claims and results under a run dir."""
-
     def __init__(self, run_dir: str | Path):
         self.run_dir = Path(run_dir)
         self.batches_dir = self.run_dir / "batches"
@@ -93,16 +91,11 @@ class BatchLedger:
             encoding="utf-8")
 
     def unclaimed(self) -> list[dict[str, Any]]:
-        claimed_tokens = {
-            path.name.rsplit(".", 1)[0] for path in self.claims_dir.iterdir()
-        }
-        return [batch for batch in self.batches
-                if batch["status"] == "pending"
-                and batch["batch_id"] not in claimed_tokens]
+        claimed = {p.name for p in self.claims_dir.iterdir() if p.is_dir()}
+        return [b for b in self.batches if b["batch_id"] not in claimed]
 
 
 def merge_decision_files(results_dir: str | Path) -> dict[str, Any]:
-    """Union per-batch decision files; conflicting pages are surfaced."""
     merged: dict[int, dict] = {}
     conflicts: list[dict] = []
     for path in sorted(Path(results_dir).glob("*.json")):
@@ -120,7 +113,6 @@ def merge_decision_files(results_dir: str | Path) -> dict[str, Any]:
 
 def verification_sample(pages: list[int], fraction: float = 0.1,
                         seed: int = 7) -> list[int]:
-    """Deterministic sample for dual-read cross-checking."""
     count = max(1, int(len(pages) * fraction))
     rng = random.Random(seed)
     return sorted(rng.sample(pages, min(count, len(pages))))

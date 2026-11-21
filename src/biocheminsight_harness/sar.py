@@ -1,16 +1,11 @@
-"""SAR table: join verified notation rows with assay measurements.
-
-The join key is the printed sequence identifier (SEQ ID NO:N). Structure
-rows from the notation ladder carry verified SMILES and mass; assay rows
-from the measurement review carry endpoint, value and unit. A compound
-appears in the SAR table only when both sides agree on the identifier —
-a row missing from either side lands in the named-gap list."""
+"""SAR table: join verified notation rows with assay measurements."""
 from __future__ import annotations
 
 import re
 from typing import Any
 
 _SEQ_RE = re.compile(r"SEQ ID NO[:.]?\s*(\d+)", re.IGNORECASE)
+_OPERATOR_RE = re.compile(r"^[<>≤≥~=]+\s*")
 
 
 def _seq_id(text: str) -> int | None:
@@ -18,14 +13,16 @@ def _seq_id(text: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _parse_potency(value: str) -> float | None:
+    cleaned = _OPERATOR_RE.sub("", value.strip())
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
 def build_sar_table(structures: list[dict[str, Any]],
                     measurements: list[dict[str, Any]]) -> dict[str, Any]:
-    """Join verified notation rows with assay observations on seq_id.
-
-    structures: rows with seq_id, notation, smiles, mass, verdict, page
-    measurements: observations with seq_id or compound text, endpoint,
-                  value, unit
-    Returns {sar_rows, structure_only, assay_only, conflicts}."""
     struct_by_seq: dict[int, dict] = {}
     assay_by_seq: dict[int, list[dict]] = {}
     structure_only: list[dict] = []
@@ -33,8 +30,8 @@ def build_sar_table(structures: list[dict[str, Any]],
 
     for row in structures:
         seq = row.get("seq_id")
-        if seq is None:
-            seq = _seq_id(row.get("notation") or row.get("notation_text") or "")
+        if not seq:
+            seq = _seq_id(row.get("notation") or "")
         if seq is not None:
             struct_by_seq[int(seq)] = row
 
@@ -73,30 +70,25 @@ def build_sar_table(structures: list[dict[str, Any]],
             assay_only.append({**assay, "seq_id": seq})
 
     return {"sar_rows": sar_rows, "structure_only": structure_only,
-            "assay_only": assay_only,
-            "joined": len(sar_rows)}
+            "assay_only": assay_only, "joined": len(sar_rows)}
 
 
 def sar_summary(sar_rows: list[dict]) -> list[str]:
-    """Narrative SAR observations from the joined table."""
-    lines = []
-    by_endpoint: dict[str, list[dict]] = {}
+    by_endpoint: dict[str, list[tuple[float, dict]]] = {}
     for row in sar_rows:
-        by_endpoint.setdefault(row.get("endpoint", ""), []).append(row)
+        potency = _parse_potency(str(row.get("value", "")))
+        if potency is not None:
+            by_endpoint.setdefault(row.get("endpoint", ""), []).append(
+                (potency, row))
 
-    for endpoint, rows in sorted(by_endpoint.items()):
-        values = []
-        for row in rows:
-            try:
-                values.append((float(row["value"]), row))
-            except (ValueError, KeyError):
-                pass
-        if len(values) < 2:
+    lines = []
+    for endpoint, entries in sorted(by_endpoint.items()):
+        if len(entries) < 2:
             continue
-        values.sort()
-        best = values[0]
-        worst = values[-1]
-        lines.append(f"{endpoint}: {len(rows)} compounds, "
+        entries.sort()
+        best = entries[0]
+        worst = entries[-1]
+        lines.append(f"{endpoint}: {len(entries)} compounds, "
                      f"best {best[1].get('notation', '')[:40]} "
                      f"({best[0]:.4g}), "
                      f"worst {worst[1].get('notation', '')[:40]} "
