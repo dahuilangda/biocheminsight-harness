@@ -14,7 +14,8 @@ from . import ocr as ocr_mod
 from . import pages as pages_mod
 from . import report
 from . import sar as sar_mod
-from .config import harness_url
+from .config import harness_url, biocheminsight_url, paddleocr_url
+from . import frontend
 
 _states: dict[str, dict] = {}
 
@@ -23,6 +24,38 @@ def create_server():
     from mcp.server.fastmcp import FastMCP
 
     mcp = FastMCP("biocheminsight-harness")
+
+    @mcp.tool()
+    def configure_deployment(url: str, paddle_url: str = "",
+                             harness_url_override: str = "") -> dict:
+        """Connect the harness to a BioChemInsight deployment.
+        Saves the URLs so subsequent tool calls use this deployment."""
+        from .config import save_deployment
+        cfg = save_deployment(url, paddle_url or None,
+                              harness_url_override or None)
+        return {"configured": True,
+                "biocheminsight_url": cfg.get("biocheminsight_url", url),
+                "paddleocr_url": cfg.get("paddleocr_url", "")}
+
+    @mcp.tool()
+    def deployment_status() -> dict:
+        """Check connectivity to the configured BioChemInsight deployment."""
+        import httpx as _httpx
+        base = biocheminsight_url().rstrip("/")
+        try:
+            r = _httpx.get(f"{base}/api/tasks", timeout=5)
+            connected = r.status_code < 500
+        except Exception:
+            connected = False
+        return {"biocheminsight_url": base, "connected": connected}
+
+    @mcp.tool()
+    def open_review_workspace(task_id: str) -> dict:
+        """Return the BioChemInsight review workspace URL for a completed
+        task. The workspace renders structures, assay tables and the merged
+        SAR view."""
+        from .frontend import review_workspace_url
+        return {"url": review_workspace_url(task_id), "task_id": task_id}
 
     @mcp.tool()
     def parse_peptide_notation(notation: str) -> dict:
