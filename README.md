@@ -112,6 +112,16 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 | `sar_build` / `sar_analysis` | SAR table and potency ranking |
 | `open_review_workspace` | frontend review URL |
 
+## Perception routing
+
+The deployment picks its perception provider by runtime, automatically:
+inside Claude Code, Codex, ZCode, OpenCode or DSH the coding agent reads
+pages with its own vision (zero model calls); a standalone deployment
+uses the configured vision model. Set `PERCEPTION_PROVIDER=agent|gemma`
+to override the detection explicitly. Pending vision requests surface
+as named requests the agent answers via
+`pipeline_perception_requests` / `pipeline_perception_answer`.
+
 ## Configuration
 
 | variable | default | purpose |
