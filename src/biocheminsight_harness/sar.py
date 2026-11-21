@@ -29,9 +29,8 @@ def build_sar_table(structures: list[dict[str, Any]],
     assay_only: list[dict] = []
 
     for row in structures:
-        seq = row.get("seq_id")
-        if not seq:
-            seq = _seq_id(row.get("notation") or "")
+        raw = row.get("seq_id")
+        seq = int(raw) if raw and str(raw).isdigit() else _seq_id(row.get("notation") or "")
         if seq is not None:
             struct_by_seq[int(seq)] = row
 
@@ -85,7 +84,7 @@ def sar_summary(sar_rows: list[dict]) -> list[str]:
     for endpoint, entries in sorted(by_endpoint.items()):
         if len(entries) < 2:
             continue
-        entries.sort()
+        entries.sort(key=lambda t: t[0])
         best = entries[0]
         worst = entries[-1]
         lines.append(f"{endpoint}: {len(entries)} compounds, "

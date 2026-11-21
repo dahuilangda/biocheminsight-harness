@@ -45,6 +45,10 @@ class BatchLedger:
                 encoding="utf-8")
         return cls(run_dir)
 
+    @staticmethod
+    def _sanitize(value: str) -> str:
+        return "".join(c for c in value if c.isalnum() or c in "-_.")
+
     def claim(self, worker: str, count: int = 1) -> list[dict[str, Any]]:
         claimed: list[dict[str, Any]] = []
         for batch in self.batches:
@@ -52,7 +56,7 @@ class BatchLedger:
                 break
             if batch["status"] != "pending":
                 continue
-            token = self.claims_dir / batch["batch_id"]
+            token = self.claims_dir / self._sanitize(batch["batch_id"])
             try:
                 token.mkdir()
             except FileExistsError:
@@ -65,7 +69,7 @@ class BatchLedger:
         return claimed
 
     def _record_claims(self, worker: str, claimed: list[dict]) -> None:
-        path = self.claims_dir / f"{worker}.json"
+        path = self.claims_dir / f"{self._sanitize(worker)}.json"
         prior: list[str] = []
         if path.is_file():
             prior = json.loads(path.read_text(encoding="utf-8"))
@@ -78,14 +82,14 @@ class BatchLedger:
         records_dir.mkdir(parents=True, exist_ok=True)
         record = {"batch_id": batch_id, "worker": worker,
                   "result": Path(result_path).name, "stats": stats or {}}
-        (records_dir / f"{batch_id}.{worker}.json").write_text(
+        (records_dir / f"{self._sanitize(batch_id)}.{self._sanitize(worker)}.json").write_text(
             json.dumps(record, ensure_ascii=False, indent=1),
             encoding="utf-8")
 
     def fail(self, worker: str, batch_id: str, reason: str) -> None:
         records_dir = self.results_dir / "records"
         records_dir.mkdir(parents=True, exist_ok=True)
-        (records_dir / f"{batch_id}.{worker}.failed.json").write_text(
+        (records_dir / f"{self._sanitize(batch_id)}.{self._sanitize(worker)}.failed.json").write_text(
             json.dumps({"batch_id": batch_id, "worker": worker,
                         "failed": reason}, ensure_ascii=False),
             encoding="utf-8")

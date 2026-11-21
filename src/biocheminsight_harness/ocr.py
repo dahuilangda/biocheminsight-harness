@@ -23,13 +23,25 @@ class OcrClient:
 
     def pages_markdown(self, pdf_path: str | Path, pages: list[int],
                        lang: str = "en") -> dict[int, str]:
-        """OCR the requested pages in timeout-sized chunks, canceling a
-        server job that outlives the client budget."""
+        """OCR the requested pages in consecutive chunks. Chunks must be
+        contiguous: non-consecutive sets are split into sub-chunks so each
+        paddle job covers a contiguous page range."""
         markdowns: dict[int, str] = {}
         ordered = sorted(dict.fromkeys(int(p) for p in pages))
-        for start in range(0, len(ordered), self.chunk_pages):
-            chunk = ordered[start:start + self.chunk_pages]
-            markdowns.update(self._chunk_markdown(pdf_path, chunk, lang))
+        chunks: list[list[int]] = []
+        current: list[int] = []
+        for page in ordered:
+            if current and page - current[-1] > 1:
+                chunks.append(current)
+                current = []
+            current.append(page)
+        if current:
+            chunks.append(current)
+        for chunk in chunks:
+            for sub in range(0, len(chunk), self.chunk_pages):
+                sub_chunk = chunk[sub:sub + self.chunk_pages]
+                markdowns.update(
+                    self._chunk_markdown(pdf_path, sub_chunk, lang))
         return markdowns
 
     def _chunk_markdown(self, pdf_path: str | Path, chunk: list[int],
@@ -67,10 +79,9 @@ class OcrClient:
         result = httpx.get(f"{self.base_url}/v1/jobs/{job_id}/result",
                            timeout=60.0).json()
         pages = result.get("pages") or []
-        ordered = sorted(chunk)
         out: dict[int, str] = {}
-        for position, item in enumerate(
-                sorted(pages, key=lambda item: int(item.get("page_number") or 0))):
-            if position < len(ordered):
-                out[ordered[position]] = str(item.get("markdown") or "")
+        for item in pages:
+            page_number = int(item.get("page_number") or 0)
+            if page_number in chunk:
+                out[page_number] = str(item.get("markdown") or "")
         return out
