@@ -117,6 +117,14 @@ def create_server():
         return str(dest)
 
     @mcp.tool()
+    def open_review_workspace(task_id: str) -> dict:
+        """Return the BioChemInsight review workspace URL for a completed
+        task. The workspace renders structures, assay tables and the merged
+        SAR view."""
+        from .frontend import review_workspace_url
+        return {"url": review_workspace_url(task_id), "task_id": task_id}
+
+    @mcp.tool()
     def build_extraction_report(task_dir: str, out_path: str,
                                 title: str = "") -> str:
         return str(report.build_report(task_dir, out_path, title))

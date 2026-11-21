@@ -15,7 +15,7 @@ deployment's model keys disappear; the coding plan's tokens take over.
 ┌──────────────────────────────────────────────────────┐
 │ coding agent (Claude Code / Codex / ZCode)            │
 │                                                       │
-│  "帮我解析 WO2025137159 这篇专利"                     │
+│  "帮我解析 your-patent 这篇专利"                     │
 │                                                       │
 │  perception: agent reads rendered pages               │
 │  chemistry:  evidence ladder + mass arbitration (RDKit)│
@@ -71,7 +71,7 @@ Add the same MCP server to your agent's tool settings, or import
 
 Ask in natural language:
 
-> 帮我解析 WO2025137159 这篇专利，输出结构、序列和活性数据，再给一份报告
+> 帮我解析 your-patent 这篇专利，输出结构、序列和活性数据，再给一份报告
 
 The agent follows `skills/biocheminsight-patents/SKILL.md`:
 

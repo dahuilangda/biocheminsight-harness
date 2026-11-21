@@ -1,6 +1,6 @@
 ---
 name: biocheminsight-patents
-description: Parse patent and literature compound data (structures, peptide sequences, structure-activity tables) with BioChemInsight. Use when the user asks to parse, extract or analyze WO/US/EP patent documents, journal articles, peptide notations, structure-activity data, potency tables or build extraction reports. Tiered: batch server mode, agent perception mode, and full SAR analysis.
+description: Parse patent and literature compound data (structures, peptide sequences, structure-activity tables) with BioChemInsight. Use when the user asks to parse, extract or analyze patent documents, journal articles, peptide notations, structure-activity data, potency tables or build extraction reports. Results render in the BioChemInsight review workspace. Tiered: batch server mode, agent perception mode, and full SAR analysis.
 ---
 
 # BioChemInsight patent and literature parsing
@@ -24,13 +24,14 @@ Read only the level file you need. L2 and L3 assume L1's server setup
 ## Tools by level
 
 - **L1** — `upload_pdf`, `start_full_pipeline`, `task_status`,
-  `download_task_result`, `build_extraction_report`.
+  `download_task_result`, `build_extraction_report`, `open_review_workspace`.
 - **L2** — `render_pages`, `render_page`, `ocr_pages`,
   `record_structure_detection`, `record_measurement_discovery`,
   `record_assay_reconciliation`.
 - **L3** — `parse_peptide_notation`, `resolve_peptide_notation`,
-  `peptide_fragment_forms`, `mass_arbitration`, plus every L2 tool and the
-  report contract in `references/report-format.md`.
+  `peptide_fragment_forms`, `mass_arbitration`, `sar_build`, `sar_analysis`,
+  plus every L2 tool and the report contract in
+  `references/report-format.md`.
 
 ## Hard rules (all levels)
 
@@ -39,3 +40,10 @@ Read only the level file you need. L2 and L3 assume L1's server setup
 - Cite page numbers for every extracted row.
 - Retry a perception step once at higher resolution (`render_page`, bigger
   dpi). A second failure is reported, never papered over.
+
+## Frontend display
+
+After a completed run, `open_review_workspace(task_id)` returns the
+BioChemInsight review workspace URL where the user can browse and edit the
+extracted rows. The workspace renders structures, assay tables and the
+merged SAR view; no extra export step is needed.

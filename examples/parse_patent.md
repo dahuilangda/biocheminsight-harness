@@ -2,17 +2,17 @@
 
 User request:
 
-> 帮我解析 WO2025137159 这篇专利，输出结构、序列、活性数据，最后给一份报告
+> 帮我解析 your-patent 这篇专利，输出结构、序列、活性数据，最后给一份报告
 
 ## Server mode
 
-1. `upload_pdf("/data/WO2025137159A1.pdf")` → `pdf_id`
+1. `upload_pdf("/data/your-patent.pdf")` → `pdf_id`
 2. `start_full_pipeline(pdf_id)` → `task_id`
 3. Poll `task_status(task_id)`; the run covers page detection, structure
    extraction (MolDetv2 + OCSR), measurement discovery and the merged CSV.
 4. `download_task_result(task_id, "out/")` → zip with `structures.csv`,
    `assays.csv`, `merged.csv`, audit trail.
-5. `build_extraction_report("out/", "report.md", "WO2025137159 SAR")`.
+5. `build_extraction_report("out/", "report.md", "your-patent SAR")`.
 6. Read `report.md` and summarize the findings for the user.
 
 ## Agent mode
