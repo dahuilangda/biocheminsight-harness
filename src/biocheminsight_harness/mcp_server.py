@@ -138,7 +138,13 @@ def create_server():
         {rotated_table, compound_table, dense_layout} go to vision, the
         rest go to paddle with quality escalation back to you."""
         from .perception import PerceptionRouter
-        types = {int(k): v for k, v in (page_types or {}).items()}
+        types = {}
+        for key, value in (page_types or {}).items():
+            try:
+                types[int(key)] = value
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"page_types key {key!r} is not a page number") from None
         result = PerceptionRouter().route_pages(pdf_path, pages, types)
         return {"markdowns": {str(k): v for k, v in result["markdowns"].items()},
                 "agent_pages": result["agent_pages"]}
@@ -324,8 +330,14 @@ def create_server():
         response.raise_for_status()
         payload = response.json()
         prompt = payload.get("prompt")
-        prior = len(list(Path(out_dir).glob(f"review_{session_id[:8]}_*.txt")))
-        index = prior
+        import re
+        prior = [
+            int(match.group(1))
+            for path in Path(out_dir).glob(f"review_{session_id[:8]}_*.txt")
+            if (match := re.fullmatch(
+                rf"review_{re.escape(session_id[:8])}_(\d+)\.txt", path.name))
+        ]
+        index = max(prior, default=-1) + 1
         if prompt:
             path = Path(out_dir) / f"review_{session_id[:8]}_{index}.txt"
             path.parent.mkdir(parents=True, exist_ok=True)

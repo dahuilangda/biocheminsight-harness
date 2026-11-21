@@ -68,6 +68,8 @@ def extract_page_images(pdf_path: str | Path, pages: list[int],
     root.mkdir(parents=True, exist_ok=True)
     saved: list[Path] = []
     for page in sorted(dict.fromkeys(int(p) for p in pages)):
+        for stale in root.glob(f"page_{page}_img_*.png"):
+            stale.unlink()
         base = root / f"_page_{page}"
         subprocess.run(
             ["pdfimages", "-f", str(page), "-l", str(page),
@@ -120,7 +122,7 @@ def render_contact_sheet(pdf_path: str | Path, pages: list[int],
                  str(dpi), "-png", str(pdf_path), str(base)],
                 check=True, capture_output=True,
             )
-            found = sorted(tmp_path.glob(base.name + "*.png"))
+            found = _poppler_outputs(tmp_path, base.name)
             if not found:
                 continue
             image = Image.open(found[0])

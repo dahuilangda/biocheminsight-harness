@@ -48,7 +48,7 @@ def dual_source_consistency(notation_smiles: str, ocsr_smiles: str
         key_b = httpx.post(
             f"{harness_url().rstrip('/')}/v1/harness/inchikey",
             json={"smiles": ocsr_smiles}, timeout=30.0).json().get("inchikey")
-    except httpx.HTTPError:
+    except (httpx.HTTPError, ValueError):
         return {"verdict": "incomplete", "reason": "deployment unreachable"}
     if not key_a or not key_b:
         return {"verdict": "incomplete", "reason": "invalid smiles"}

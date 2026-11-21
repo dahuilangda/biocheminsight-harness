@@ -34,7 +34,10 @@ only fail a row, never silently pass one.
 For assay pages whose values the deployment should extract without
 configured model keys, drive the review session:
 
-1. `measurement_review_start(source_markdown, out_dir)` — returns the
+1. `measurement_review_start(source, out_dir)` — returns the
+   first prompt. Write your answers to files that do NOT match
+   `review_<id>_*.txt` in `out_dir` (that pattern is reserved for
+   prompts); pass each answer file to `measurement_review_submit`.
    extract prompt file.
 2. Answer it as the model would (the observation JSON per
    `references/report-format.md` contracts); write the raw answer to a

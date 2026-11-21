@@ -7,11 +7,10 @@ Routes each page to the best perception backend:
   paddle VL-1.6 — upright prose pages, standard assay tables, pages
                   with a clear text layer
 
-The page type comes from the structure detection stage (the parallel
-agents already classified each page). Paddle output that fails the
-quality bar is escalated to the agent, so no fixed ordering is assumed:
-the router adapts to whatever the detection stage found and to what
-paddle actually produced.
+Page types come from the caller's own judgment (a misnamed type routes
+to paddle). Paddle output that fails the quality bar is escalated to
+the agent, as is a paddle chunk failure — the router adapts to what it
+is given and to what paddle actually produced.
 """
 from __future__ import annotations
 
@@ -74,8 +73,20 @@ class PerceptionRouter:
             else:
                 paddle_pages.append(page)
         markdowns: dict[int, str] = {}
-        if paddle_pages:
-            markdowns = self.client.pages_markdown(pdf_path, paddle_pages)
+        failed_pages: list[int] = []
+        chunk = max(1, self.client.chunk_pages)
+        for start in range(0, len(paddle_pages), chunk):
+            batch = paddle_pages[start:start + chunk]
+            try:
+                markdowns.update(
+                    self.client.pages_markdown(pdf_path, batch))
+            except Exception:
+                # paddle failed for this chunk: those pages escalate to
+                # agent vision instead of aborting the whole routing
+                failed_pages.extend(batch)
+        for page in failed_pages:
+            if page in markdowns:
+                del markdowns[page]
         escalated = [
             page for page, text in sorted(markdowns.items())
             if needs_escalation(assess_quality(text))
@@ -83,4 +94,5 @@ class PerceptionRouter:
         for page in escalated:
             del markdowns[page]
         return {"markdowns": markdowns,
-                "agent_pages": sorted(agent_pages + escalated)}
+                "agent_pages": sorted(set(agent_pages + escalated)),
+                "failed_pages": sorted(failed_pages)}

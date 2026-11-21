@@ -13,6 +13,9 @@ class PageDecision(BaseModel):
     has_structure: bool
     confidence: Literal["low", "medium", "high"]
     reason: str = ""
+    page_type: Literal[
+        "prose", "compound_table", "rotated_table", "dense_layout",
+        "sequence", "assay_chart", "definition", "other"] | None = None
 
 
 class StructureDetection(BaseModel):

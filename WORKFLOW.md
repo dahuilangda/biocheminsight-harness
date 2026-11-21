@@ -37,11 +37,13 @@ resolve_peptide_notation(notation, declared_mass, form, seq_id)
 ```
 
 Acceptance authority is routed by data type: mass arbitration for rows
-with a declared mass; dual-source agreement (the same notation read
-from two distinct pages) for massless rows; text-grounded high-
-confidence statements for measurements. Chart-position readings need a
-second source — alone they stay unverified. Rejected readings are
-named gaps, not failures to hide.
+with a declared mass; dual-source agreement for massless rows — two
+genuinely independent readings of the same code (a two-page
+transcription match, or notation-SMILES vs structure-SMILES InChIKey
+via `verify_dual_source`; never the same string twice); text-grounded
+high-confidence statements for measurements. Chart-position readings
+need a second source — alone they stay unverified. Rejected readings
+are named gaps, not failures to hide.
 
 ## 4. Read measurements
 

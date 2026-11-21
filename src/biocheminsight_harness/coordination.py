@@ -60,6 +60,7 @@ class BatchLedger:
                 token.mkdir()
             except FileExistsError:
                 continue
+            (token / "owner").write_text(worker, encoding="utf-8")
             batch["worker"] = worker
             claimed.append(batch)
         if claimed:
@@ -91,23 +92,36 @@ class BatchLedger:
             json.dumps({"batch_id": batch_id, "worker": worker,
                         "failed": reason}, ensure_ascii=False),
             encoding="utf-8")
-        self.release(batch_id)
+        self.release(batch_id, worker=worker)
 
-    def release(self, batch_id: str) -> None:
+    def release(self, batch_id: str, worker: str | None = None,
+                max_attempts: int = 3) -> None:
         """Drop the claim token so the batch becomes claimable again; a
-        crashed or failing worker must never strand its batch."""
-        self._record_release(self._sanitize(batch_id))
+        crashed or failing worker must never strand its batch. The token
+        records its owner — a release by another worker is refused — and
+        attempt markers bound poison-batch loops."""
         token = self.claims_dir / self._sanitize(batch_id)
+        if worker is not None and token.is_dir():
+            owner = (token / "owner")
+            if owner.is_file() and owner.read_text(
+                    encoding="utf-8").strip() != worker:
+                raise ValueError(
+                    f"batch {batch_id} is claimed by another worker")
+        attempts_file = self.run_dir / "attempts" / f"{self._sanitize(batch_id)}.json"
+        attempts_file.parent.mkdir(parents=True, exist_ok=True)
+        attempts = 1
+        if attempts_file.is_file():
+            try:
+                attempts = json.loads(
+                    attempts_file.read_text(encoding="utf-8")) + 1
+            except ValueError:
+                attempts = 1
+        attempts_file.write_text(json.dumps(attempts), encoding="utf-8")
         if token.is_dir():
+            if attempts > max_attempts:
+                raise ValueError(
+                    f"batch {batch_id} exceeded {max_attempts} attempts")
             token.rmdir()
-
-    def _record_release(self, batch_id: str) -> None:
-        path = self.run_dir / "released.json"
-        released: list[str] = []
-        if path.is_file():
-            released = json.loads(path.read_text(encoding="utf-8"))
-        released.append(batch_id)
-        path.write_text(json.dumps(released), encoding="utf-8")
 
     def unclaimed(self) -> list[dict[str, Any]]:
         claimed = {p.name for p in self.claims_dir.iterdir() if p.is_dir()}

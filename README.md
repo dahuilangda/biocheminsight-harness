@@ -100,6 +100,7 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 | `record_measurement_discovery` | assay pages and names |
 | `record_assay_reconciliation` | assay-name merge/drop/rename |
 | `verify_extraction` | cross-check independent readings |
+| `record_monomer_dictionary` | document-scoped residue codebook (your vision OCSR) |
 | `verify_dual_source` | InChIKey agreement for structure second-source |
 | `measurement_review_start` / `measurement_review_submit` | measurement review session |
 | `task_artifact_urls` | browser URLs for finished tables |
