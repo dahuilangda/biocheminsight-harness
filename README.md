@@ -5,13 +5,31 @@ structure-activity tables — from inside coding agents via natural language.
 
 No API keys. No model configuration. The coding plan's tokens are the model.
 
-## Install
+## Quick start
 
-Tell your coding agent:
+Paste the repo URL into your coding agent's input box:
 
-> 安装 biocheminsight-harness 并连接到 http://your-server:8000
+```
+https://github.com/dahuilangda/biocheminsight-harness
+```
 
-Or manually:
+The agent clones, installs, and registers the MCP server. Then tell it
+where your BioChemInsight deployment is:
+
+```
+连接到 http://your-server:8000
+```
+
+Then ask:
+
+```
+帮我解析 your-patent.pdf 这篇专利，输出结构、序列和活性数据，给一份报告
+```
+
+That's it. No manual pip install, no MCP config file, no environment
+variables — the agent handles all of it.
+
+### Manual install (optional)
 
 ```bash
 git clone https://github.com/dahuilangda/biocheminsight-harness.git
@@ -20,15 +38,11 @@ pip install -e ".[mcp,dev]"
 export BIOCHEMINSIGHT_URL=http://your-server:8000
 ```
 
-Register the MCP server:
+MCP config (if your agent requires explicit registration):
 
 ```json
 { "mcpServers": { "biocheminsight-harness": { "command": "biocheminsight-harness" } } }
 ```
-
-Then ask:
-
-> 帮我解析 your-patent.pdf 这篇专利，输出结构、序列和活性数据，给一份报告
 
 ## How it works
 
@@ -71,6 +85,8 @@ tokens are the model.
 
 | tool | purpose |
 |---|---|
+| `configure_deployment` | connect to a BioChemInsight server |
+| `deployment_status` | check connectivity |
 | `parse_peptide_notation` | notation to tokens |
 | `resolve_peptide_notation` | evidence ladder + mass arbitration |
 | `peptide_fragment_forms` | backbone / cap forms |
@@ -94,14 +110,5 @@ tokens are the model.
 | `BIOCHEMINSIGHT_HARNESS_URL` | `http://127.0.0.1:8011` | chemistry endpoints |
 | `PADDLEOCR_URL` | `http://127.0.0.1:8010` | paddle VL-1.6 |
 
-The deployment can be on another server; the harness is a pure client.
-
-## Design
-
-- Perception is the agent's job, validated by pydantic contracts.
-- Deterministic chemistry reports named gaps, never guesses.
-- The paddle client chunks submissions to fit client timeouts and cancels
-  abandoned server jobs.
-- Structure pages are excluded from assay discovery; the stages share
-  findings through `exclude_pages`.
-- Detection results are cached per document.
+Persisted in `~/.biocheminsight/config.json` via `configure_deployment`;
+environment variables override.
