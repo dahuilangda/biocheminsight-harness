@@ -36,8 +36,12 @@ then let deterministic chemistry arbitrate — never accept a raw reading:
 resolve_peptide_notation(notation, declared_mass, form, seq_id)
 ```
 
-Mass arbitration is the only acceptance authority. Rejected readings
-are named gaps, not failures to hide.
+Acceptance authority is routed by data type: mass arbitration for rows
+with a declared mass; dual-source agreement (the same notation read
+from two distinct pages) for massless rows; text-grounded high-
+confidence statements for measurements. Chart-position readings need a
+second source — alone they stay unverified. Rejected readings are
+named gaps, not failures to hide.
 
 ## 4. Read measurements
 
