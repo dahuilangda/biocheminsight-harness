@@ -27,6 +27,8 @@ class BatchLedger:
     @classmethod
     def partition(cls, run_dir: str | Path, total_pages: int,
                   pages_per_batch: int = 12) -> "BatchLedger":
+        if pages_per_batch < 1:
+            raise ValueError("pages_per_batch must be at least 1")
         run_dir = Path(run_dir)
         batches_dir = run_dir / "batches"
         batches_dir.mkdir(parents=True, exist_ok=True)
@@ -38,7 +40,6 @@ class BatchLedger:
                 batches.append({
                     "batch_id": f"b{start:04d}-{end:04d}",
                     "pages": list(range(start, end + 1)),
-                    "status": "pending",
                 })
             manifest.write_text(
                 json.dumps(batches, ensure_ascii=False, indent=1),
@@ -54,14 +55,11 @@ class BatchLedger:
         for batch in self.batches:
             if len(claimed) >= count:
                 break
-            if batch["status"] != "pending":
-                continue
             token = self.claims_dir / self._sanitize(batch["batch_id"])
             try:
                 token.mkdir()
             except FileExistsError:
                 continue
-            batch["status"] = "claimed"
             batch["worker"] = worker
             claimed.append(batch)
         if claimed:
@@ -93,6 +91,23 @@ class BatchLedger:
             json.dumps({"batch_id": batch_id, "worker": worker,
                         "failed": reason}, ensure_ascii=False),
             encoding="utf-8")
+        self.release(batch_id)
+
+    def release(self, batch_id: str) -> None:
+        """Drop the claim token so the batch becomes claimable again; a
+        crashed or failing worker must never strand its batch."""
+        self._record_release(self._sanitize(batch_id))
+        token = self.claims_dir / self._sanitize(batch_id)
+        if token.is_dir():
+            token.rmdir()
+
+    def _record_release(self, batch_id: str) -> None:
+        path = self.run_dir / "released.json"
+        released: list[str] = []
+        if path.is_file():
+            released = json.loads(path.read_text(encoding="utf-8"))
+        released.append(batch_id)
+        path.write_text(json.dumps(released), encoding="utf-8")
 
     def unclaimed(self) -> list[dict[str, Any]]:
         claimed = {p.name for p in self.claims_dir.iterdir() if p.is_dir()}

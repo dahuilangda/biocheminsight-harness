@@ -73,6 +73,8 @@ class OcrClient:
                 break
             if state == "failed":
                 raise RuntimeError(f"paddle job {job_id} failed")
+            if state == "canceled":
+                raise OcrJobCanceled(f"paddle job {job_id} canceled")
             time.sleep(2.0)
         else:
             raise TimeoutError(f"paddle job {job_id} timed out")

@@ -1,6 +1,9 @@
 """Perception contract validation."""
+import json
 import pytest
 from pydantic import ValidationError
+
+from pathlib import Path
 
 from biocheminsight_harness import decisions
 
@@ -15,7 +18,7 @@ def test_structure_detection_keeps_detected_pages():
              "reason": "prose"},
         ]})
     assert model.detected_pages() == [58]
-    loaded = decisions.load_json("/tmp/detect.json")
+    loaded = json.loads(Path("/tmp/detect.json").read_text())
     assert loaded["decisions"][0]["page"] == 58
 
 

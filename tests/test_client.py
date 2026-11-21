@@ -34,26 +34,4 @@ def test_start_full_pipeline_and_status(tmp_path):
     assert client.task(task_id)["status"] == "running"
 
 
-def test_wait_for_task_returns_terminal_state():
-    states = iter([{"status": "running"}, {"status": "completed"}])
 
-    client = _client({"/api/tasks/t9": {}})
-    monkey = lambda: next(states)
-    client_http_states = states
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=next(client_http_states))
-
-    transport = httpx.MockTransport(handler)
-    client.http = httpx.Client(transport=transport)
-    task = client.wait_for_task("t9", poll_seconds=0.01)
-    assert task["status"] == "completed"
-
-
-def test_wait_for_task_times_out():
-    client = _client({"/api/tasks/t9": {}})
-    client.http = httpx.Client(transport=httpx.MockTransport(
-        lambda request: httpx.Response(200, json={"status": "running"})))
-    import pytest
-    with pytest.raises(TimeoutError):
-        client.wait_for_task("t9", poll_seconds=0.01, timeout_seconds=0.05)

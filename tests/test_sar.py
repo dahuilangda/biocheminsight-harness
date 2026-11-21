@@ -49,6 +49,35 @@ def test_sar_summary_ranks_by_potency():
         {"endpoint": "IC50", "value": "0.5", "notation": "comp-B"},
         {"endpoint": "IC50", "value": "500", "notation": "comp-C"},
     ]
-    lines = sar_summary(rows)
+    out = sar_summary(rows)
+    lines = out["summary"]
     assert len(lines) == 1
     assert "comp-B" in lines[0] and "0.5" in lines[0]
+    assert out["unparseable_values"] == []
+
+def test_sar_summary_respects_endpoint_direction():
+    rows = [
+        {"endpoint": "% inhibition", "value": "80", "notation": "hi"},
+        {"endpoint": "% inhibition", "value": "20", "notation": "lo"},
+    ]
+    out = sar_summary(rows, higher_is_better={"% inhibition": True})
+    assert out["summary"][0].index("hi") < out["summary"][0].index("lo")
+
+
+def test_sar_summary_keeps_cutoff_operators():
+    rows = [
+        {"endpoint": "IC50", "value": ">10000", "notation": "weak"},
+        {"endpoint": "IC50", "value": "0.5", "notation": "strong"},
+    ]
+    out = sar_summary(rows)
+    assert ">10000" in out["summary"][0]
+
+
+def test_sar_summary_names_unparseable_values():
+    rows = [
+        {"endpoint": "IC50", "value": "12", "notation": "a"},
+        {"endpoint": "IC50", "value": "ND", "notation": "b"},
+    ]
+    out = sar_summary(rows)
+    assert out["unparseable_values"] == [
+        {"endpoint": "IC50", "value": "ND", "notation": "b"}]

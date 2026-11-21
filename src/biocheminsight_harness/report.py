@@ -15,10 +15,18 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def _load_json(path: Path) -> dict[str, Any]:
+def _load_json(path: Path, default: Any = None) -> Any:
     if not path.is_file():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+        return {} if default is None else default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return {} if default is None else default
+
+
+def _cell(value: Any, limit: int = 0) -> str:
+    text = "" if value is None else str(value)
+    return text[:limit] if limit else text
 
 
 def build_report(task_dir: str | Path, out_path: str | Path,
@@ -48,9 +56,9 @@ def build_report(task_dir: str | Path, out_path: str | Path,
         lines.append("| id | smiles | page |")
         lines.append("|---|---|---|")
         for row in structures[:50]:
-            lines.append(f"| {row.get('compound_id', '')} "
-                         f"| {row.get('smiles', '')[:60]} "
-                         f"| {row.get('page', '')} |")
+            lines.append(f"| {_cell(row.get('compound_id'))} "
+                         f"| {_cell(row.get('smiles'), 60)} "
+                         f"| {_cell(row.get('page'))} |")
         if len(structures) > 50:
             lines.append(f"| … | {len(structures) - 50} more | |")
     else:
@@ -63,19 +71,17 @@ def build_report(task_dir: str | Path, out_path: str | Path,
         lines.append("| compound | endpoint | value | unit |")
         lines.append("|---|---|---|---|")
         for row in assays[:50]:
-            lines.append(f"| {row.get('compound_id', '')} "
-                         f"| {row.get('endpoint', '')} "
-                         f"| {row.get('value', '')} "
-                         f"| {row.get('unit', '')} |")
+            lines.append(f"| {_cell(row.get('compound_id'))} "
+                         f"| {_cell(row.get('endpoint'))} "
+                         f"| {_cell(row.get('value'))} "
+                         f"| {_cell(row.get('unit'))} |")
         if len(assays) > 50:
             lines.append(f"| … | {len(assays) - 50} more | | |")
     else:
         lines.append("none")
 
     gaps = audit.get("gaps") if isinstance(audit, dict) else None
-    chart_gaps = _load_json(task_dir / "chart_extraction_gaps.json")
-    if not isinstance(chart_gaps, list):
-        chart_gaps = []
+    chart_gaps = _load_json(task_dir / "chart_extraction_gaps.json", [])
     if gaps or chart_gaps:
         lines.append("")
         lines.append("## Named gaps")
@@ -83,8 +89,8 @@ def build_report(task_dir: str | Path, out_path: str | Path,
         for gap in gaps[:30]:
             lines.append(f"- {str(gap)[:160]}")
         for gap in chart_gaps[:30]:
-            lines.append(f"- chart page {gap.get('page', '?')} "
-                         f"{gap.get('image', '')}: {gap.get('reason', '')[:120]}")
+            lines.append(f"- chart page {_cell(gap.get('page'), 8)} "
+                         f"{_cell(gap.get('image'))}: {_cell(gap.get('reason'), 120)}")
         if len(chart_gaps) > 30:
             lines.append(f"- … {len(chart_gaps) - 30} more chart gaps")
 

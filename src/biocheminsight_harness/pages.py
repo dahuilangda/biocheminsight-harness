@@ -29,6 +29,17 @@ def _require(*tools: str) -> None:
             raise PDFRendererUnavailable(f"{tool} is required")
 
 
+def _poppler_outputs(directory: Path, prefix: str) -> list[Path]:
+    """pdfimages/pdftoppm name outputs prefix-001.png (or prefix.png for
+    single-image jobs). An exact-prefix match keeps page 2 from claiming
+    page 21's leftovers in a reused directory."""
+    found = sorted(directory.glob(f"{prefix}-*.png"))
+    exact = directory / f"{prefix}.png"
+    if exact.is_file():
+        found.insert(0, exact)
+    return found
+
+
 def extract_native(pdf_path: str | Path, page: int,
                    out_path: str | Path) -> Path:
     """Extract the embedded page image at native resolution (pdfimages)."""
@@ -41,7 +52,7 @@ def extract_native(pdf_path: str | Path, page: int,
          "-png", str(pdf_path), str(raw)],
         check=True, capture_output=True,
     )
-    found = sorted(out.parent.glob(f"_raw_{out.stem}*.png"))
+    found = _poppler_outputs(out.parent, f"_raw_{out.stem}")
     if not found:
         raise RuntimeError(f"page {page}: no embedded image")
     found[0].rename(out)
@@ -63,7 +74,7 @@ def extract_page_images(pdf_path: str | Path, pages: list[int],
              "-png", str(pdf_path), str(base)],
             check=True, capture_output=True,
         )
-        found = sorted(root.glob(f"_page_{page}*.png"))
+        found = _poppler_outputs(root, f"_page_{page}")
         if not found:
             raise RuntimeError(f"page {page}: no embedded image")
         for index, image in enumerate(found):
@@ -84,7 +95,7 @@ def render_page(pdf_path: str | Path, page: int, out_path: str | Path,
          "-png", str(pdf_path), str(out.with_suffix(""))],
         check=True, capture_output=True,
     )
-    rendered = sorted(out.parent.glob(out.stem + "*.png"))
+    rendered = _poppler_outputs(out.parent, out.stem)
     if not rendered:
         raise RuntimeError(f"page {page} rendered nothing")
     rendered[0].rename(out)
@@ -131,7 +142,3 @@ def render_contact_sheet(pdf_path: str | Path, pages: list[int],
         sheet.save(out)
     return out
 
-
-def tempfile_dir() -> Path:
-    import tempfile
-    return Path(tempfile.mkdtemp(prefix="bch-pages-"))
