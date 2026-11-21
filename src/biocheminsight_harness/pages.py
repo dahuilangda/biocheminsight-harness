@@ -48,6 +48,31 @@ def extract_native(pdf_path: str | Path, page: int,
     return out
 
 
+def extract_page_images(pdf_path: str | Path, pages: list[int],
+                        out_dir: str | Path) -> list[Path]:
+    """Extract every embedded image on the given pages (chart crops,
+    structure plates). Returns the saved paths in page order."""
+    _require("pdfimages")
+    root = Path(out_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    saved: list[Path] = []
+    for page in sorted(dict.fromkeys(int(p) for p in pages)):
+        base = root / f"_page_{page}"
+        subprocess.run(
+            ["pdfimages", "-f", str(page), "-l", str(page),
+             "-png", str(pdf_path), str(base)],
+            check=True, capture_output=True,
+        )
+        found = sorted(root.glob(f"_page_{page}*.png"))
+        if not found:
+            raise RuntimeError(f"page {page}: no embedded image")
+        for index, image in enumerate(found):
+            target = root / f"page_{page}_img_{index}.png"
+            image.rename(target)
+            saved.append(target)
+    return saved
+
+
 def render_page(pdf_path: str | Path, page: int, out_path: str | Path,
                 dpi: int = 150) -> Path:
     """Render a page via pdftoppm (for PDFs with text layers)."""

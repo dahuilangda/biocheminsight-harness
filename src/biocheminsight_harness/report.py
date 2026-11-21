@@ -73,12 +73,20 @@ def build_report(task_dir: str | Path, out_path: str | Path,
         lines.append("none")
 
     gaps = audit.get("gaps") if isinstance(audit, dict) else None
-    if gaps:
+    chart_gaps = _load_json(task_dir / "chart_extraction_gaps.json")
+    if not isinstance(chart_gaps, list):
+        chart_gaps = []
+    if gaps or chart_gaps:
         lines.append("")
         lines.append("## Named gaps")
         lines.append("")
         for gap in gaps[:30]:
             lines.append(f"- {str(gap)[:160]}")
+        for gap in chart_gaps[:30]:
+            lines.append(f"- chart page {gap.get('page', '?')} "
+                         f"{gap.get('image', '')}: {gap.get('reason', '')[:120]}")
+        if len(chart_gaps) > 30:
+            lines.append(f"- … {len(chart_gaps) - 30} more chart gaps")
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)

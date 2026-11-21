@@ -61,8 +61,10 @@ you ──natural language──▶ coding agent
 The agent renders pages, reads them with its own vision, and feeds
 structured answers to the harness. Deterministic chemistry validates every
 answer: mass arbitration rejects wrong readings, named gaps surface
-unknown tokens. No API keys, no model configuration — the coding plan's
-tokens are the model.
+unknown tokens, chart data is transcribed from printed values only. No
+API keys, no model configuration — the coding plan's tokens are the model.
+
+See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 
 ## Architecture
 
@@ -92,9 +94,11 @@ tokens are the model.
 | `peptide_fragment_forms` | backbone / cap forms |
 | `mass_arbitration` | dual-convention mass check |
 | `render_pages` / `render_page` | contact sheets / single pages |
+| `extract_page_images` | native chart crops for vision reading |
 | `record_structure_detection` | validated page decisions |
 | `record_measurement_discovery` | assay pages and names |
 | `record_assay_reconciliation` | assay-name merge/drop/rename |
+| `verify_extraction` | cross-check independent readings |
 | `ocr_pages` | paddle VL-1.6 markdown |
 | `upload_pdf` / `start_full_pipeline` / `task_status` / `download_task_result` | server pipeline |
 | `build_extraction_report` | markdown report |

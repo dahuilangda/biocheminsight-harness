@@ -64,6 +64,14 @@ def create_server():
         return str(pages_mod.render_page(pdf_path, page, out_path, dpi))
 
     @mcp.tool()
+    def extract_page_images(pdf_path: str, pages: list[int],
+                            out_dir: str) -> list[str]:
+        """Extract embedded chart crops / structure plates at native
+        resolution so you can read them with your own vision."""
+        return [str(path) for path in pages_mod.extract_page_images(
+            pdf_path, pages, out_dir)]
+
+    @mcp.tool()
     def record_structure_detection(out_path: str,
                                    decisions: list[dict]) -> dict:
         model = decisions_mod.record_structure_detection(
@@ -196,6 +204,16 @@ def create_server():
     @mcp.tool()
     def sar_analysis(sar_rows: list[dict]) -> list[str]:
         return sar_mod.sar_summary(sar_rows)
+
+    # --- verification ---
+
+    @mcp.tool()
+    def verify_extraction(readings: list[dict],
+                          key_fields: list[str]) -> dict:
+        """Cross-check independent readings of the same source (OCR vs
+        your own vision vs chart transcription) on key fields."""
+        from .verification import cross_check
+        return cross_check(readings, key_fields)
 
     # --- measurement review session ---
 
