@@ -112,6 +112,29 @@ def create_server():
     # --- OCR ---
 
     @mcp.tool()
+    def pipeline_perception_requests() -> list[dict]:
+        """Vision calls the server pipeline awaits when its perception
+        provider is set to agent mode: read each rendered sheet with your
+        own vision and answer via pipeline_perception_answer."""
+        from .config import harness_url
+        r = httpx.get(f"{harness_url().rstrip('/')}/v1/harness/perception/requests",
+                      timeout=30.0)
+        r.raise_for_status()
+        return r.json().get("requests", [])
+
+    @mcp.tool()
+    def pipeline_perception_answer(request_id: str, answer: str) -> dict:
+        """Submit your answer for one pending pipeline perception request.
+        The answer must satisfy the task's own output contract (return the
+        JSON the prompt asks for, verbatim)."""
+        from .config import harness_url
+        r = httpx.post(
+            f"{harness_url().rstrip('/')}/v1/harness/perception/{request_id}/answer",
+            json={"answer": answer}, timeout=30.0)
+        r.raise_for_status()
+        return r.json()
+
+    @mcp.tool()
     def record_monomer_dictionary(task_session_id: str, entries: list[dict],
                                   output_dir: str = "") -> dict:
         """Feed the document's own monomer definitions (code -> SMILES
