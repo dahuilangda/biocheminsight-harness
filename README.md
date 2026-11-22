@@ -102,6 +102,11 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 | `verify_extraction` | cross-check independent readings |
 | `record_monomer_dictionary` | document-scoped residue codebook (your vision OCSR) |
 | `verify_dual_source` | InChIKey agreement for structure second-source |
+| `fetch_perception_sheet` | download a perception sheet image |
+| `task_tables` | read structures/assays/merged/sar inline |
+| `cancel_task` | cancel a running pipeline |
+| `parse_sequence` / `smiles_to_sequence` | sequence chemistry via deployment |
+| `verify_structure` | visual verification of a decode vs its crop |
 | `measurement_review_start` / `measurement_review_submit` | measurement review session |
 | `task_artifact_urls` | browser URLs for finished tables |
 | `batch_fail` | release a failed batch for another worker |
