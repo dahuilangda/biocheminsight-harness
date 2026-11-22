@@ -27,13 +27,10 @@ def _authed():
     kwargs["verify"] = False
     return kwargs
 
-
 def create_server():
     from mcp.server.fastmcp import FastMCP
 
     mcp = FastMCP("biocheminsight-harness")
-
-    # --- deployment configuration ---
 
     @mcp.tool()
     def configure_deployment(url: str, ocr_url: str = "",
@@ -79,8 +76,6 @@ def create_server():
                 "ocr_service": paddle_ok,
                 "connected": pipeline_ok}
 
-    # --- perception round-trip ---
-
     @mcp.tool()
     def render_pages(pdf_path: str, page_numbers: list[int], out_path: str,
                      columns: int = 4, thumb_width: int = 320) -> str:
@@ -123,8 +118,6 @@ def create_server():
         model = decisions_mod.record_assay_reconciliation(
             out_path, {"decisions": decisions})
         return {"decisions": len(model.decisions)}
-
-    # --- OCR ---
 
     @mcp.tool()
     def pipeline_perception_requests(task_id: str) -> list[dict]:
@@ -222,8 +215,6 @@ def create_server():
                        encoding="utf-8")
         return str(out)
 
-    # --- deterministic chemistry ---
-
     @mcp.tool()
     def parse_peptide_notation(notation: str) -> dict:
         return chemistry.parse_notation(notation)
@@ -244,8 +235,6 @@ def create_server():
     def mass_arbitration(smiles: str, declared_mass: float,
                          tolerance: float = 0.8) -> dict:
         return chemistry.mass_arbitration(smiles, declared_mass, tolerance)
-
-    # --- server pipeline ---
 
     @mcp.tool()
     def upload_pdf(path: str) -> str:
@@ -303,8 +292,6 @@ def create_server():
         dest = BioChemInsightClient().download_result(
             task_id, Path(dest_dir) / f"{task_id}.zip")
         return str(dest)
-
-    # --- output ---
 
     @mcp.tool()
     def build_extraction_report(task_dir: str, out_path: str,
@@ -437,8 +424,6 @@ def create_server():
                 "assays": frontend.assays_url(task_id),
                 "merged": frontend.merged_url(task_id)}
 
-    # --- parallel coordination ---
-
     @mcp.tool()
     def batch_partition(run_dir: str, total_pages: int,
                         pages_per_batch: int = 12) -> dict:
@@ -469,8 +454,6 @@ def create_server():
     def batch_merge(results_dir: str) -> dict:
         return coord.merge_decision_files(results_dir)
 
-    # --- SAR ---
-
     @mcp.tool()
     def sar_build(structures: list[dict],
                   measurements: list[dict]) -> dict:
@@ -479,8 +462,6 @@ def create_server():
     @mcp.tool()
     def sar_analysis(sar_rows: list[dict]) -> list[str]:
         return sar_mod.sar_summary(sar_rows)
-
-    # --- verification ---
 
     @mcp.tool()
     def verify_extraction(readings: list[dict],
@@ -496,8 +477,6 @@ def create_server():
         SMILES and the OCSR crop SMILES must agree on InChIKey."""
         from .verification import dual_source_consistency
         return dual_source_consistency(notation_smiles, ocsr_smiles)
-
-    # --- measurement review session ---
 
     @mcp.tool()
     def measurement_review_start(source: str, out_dir: str,
@@ -552,10 +531,8 @@ def create_server():
 
     return mcp
 
-
 def main():
     create_server().run()
-
 
 if __name__ == "__main__":
     main()

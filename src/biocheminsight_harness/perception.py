@@ -30,7 +30,6 @@ _NOTATION_RE = re.compile(
     r"(?:ac-|[^a-z])-[A-Z]|SEQ ID NO|Compound \d|Example \d", re.IGNORECASE)
 _DEGENERATE_RE = re.compile(r"(.{6,}?)\1{3,}", re.MULTILINE)
 
-
 def assess_quality(markdown: str) -> dict[str, Any]:
     if not markdown or len(markdown) < 50:
         return {"quality": "empty", "notation_hits": 0, "chars": len(markdown)}
@@ -47,10 +46,8 @@ def assess_quality(markdown: str) -> dict[str, Any]:
     return {"quality": quality, "notation_hits": notation_hits,
             "chars": len(markdown), "degenerate": degenerate}
 
-
 def needs_escalation(quality: dict) -> bool:
     return quality["quality"] in ("empty", "poor", "degenerate")
-
 
 class PerceptionRouter:
     """Splits pages between paddle OCR and agent vision.
@@ -81,8 +78,6 @@ class PerceptionRouter:
                 markdowns.update(
                     self.client.pages_markdown(pdf_path, batch))
             except Exception:
-                # paddle failed for this chunk: those pages escalate to
-                # agent vision instead of aborting the whole routing
                 failed_pages.extend(batch)
         for page in failed_pages:
             if page in markdowns:
