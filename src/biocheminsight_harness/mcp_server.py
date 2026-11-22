@@ -121,7 +121,12 @@ def create_server():
             f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}/perception/requests",
             timeout=30.0)
         r.raise_for_status()
-        return r.json().get("requests", [])
+        requests = r.json().get("requests", [])
+        for request in requests:
+            request["sheet_url"] = (f"{biocheminsight_url().rstrip('/')}"
+                                    f"/api/tasks/{task_id}/perception/requests/"
+                                    f"{request['request_id']}/sheet")
+        return requests
 
     @mcp.tool()
     def pipeline_perception_answer(task_id: str, request_id: str,
