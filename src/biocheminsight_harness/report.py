@@ -29,14 +29,35 @@ def _cell(value: Any, limit: int = 0) -> str:
     return text[:limit] if limit else text
 
 
+def _named_gaps(task_dir: Path) -> list[str]:
+    gaps: list[str] = []
+    for path in sorted(task_dir.glob("audit/*.jsonl")):
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if row.get("ok"):
+                    continue
+                reason = (row.get("error")
+                          or row.get("error_type")
+                          or "model call failed")
+                gaps.append(f"{row.get('task_name', '?')}: {str(reason)[:120]}")
+    return gaps
+
+
 def build_report(task_dir: str | Path, out_path: str | Path,
                  title: str = "") -> Path:
     """Write report.md summarizing structures, assays and named gaps."""
     task_dir = Path(task_dir)
     structures = _read_csv(task_dir / "structures.csv")
-    assays = _read_csv(task_dir / "assays.csv")
-    merged = _read_csv(task_dir / "merged.csv")
+    assays = (_read_csv(task_dir / "bioactivity.csv")
+              or _read_csv(task_dir / "assays.csv"))
+    merged = (_read_csv(task_dir / "merged_results.csv")
+              or _read_csv(task_dir / "merged.csv"))
     audit = _load_json(task_dir / "audit.json")
+    gaps = _named_gaps(task_dir)
 
     lines: list[str] = []
     lines.append(f"# {title or 'BioChemInsight extraction report'}")
@@ -80,7 +101,7 @@ def build_report(task_dir: str | Path, out_path: str | Path,
     else:
         lines.append("none")
 
-    gaps = audit.get("gaps") if isinstance(audit, dict) else None
+    gaps = gaps or audit.get("gaps") if isinstance(audit, dict) else gaps
     chart_gaps = _load_json(task_dir / "chart_extraction_gaps.json", [])
     if gaps or chart_gaps:
         lines.append("")

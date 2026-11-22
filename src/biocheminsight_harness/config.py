@@ -47,3 +47,24 @@ def save_deployment(url: str, paddle_url: str | None = None,
         cfg["harness_url"] = harness_url_override
     _CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     return cfg
+
+
+def auth_credentials() -> tuple[str, str] | None:
+    return auth()
+
+
+def auth() -> tuple[str, str] | None:
+    user = _setting("BIOCHEMINSIGHT_USER", "biocheminsight_user", "")
+    password = _setting("BIOCHEMINSIGHT_PASS", "biocheminsight_pass", "")
+    if user and password:
+        return (user, password)
+    return None
+
+
+def save_auth(user: str, password: str) -> dict:
+    _CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    cfg = _config()
+    cfg["biocheminsight_user"] = user
+    cfg["biocheminsight_pass"] = password
+    _CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    return {"saved": True}
