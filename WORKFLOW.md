@@ -45,6 +45,20 @@ high-confidence statements for measurements. Chart-position readings
 need a second source — alone they stay unverified. Rejected readings
 are named gaps, not failures to hide.
 
+### Boxing structures on a page
+
+For structure-dense pages, run detection first and read the boxes:
+
+```
+render_page(pdf_path, page, out_path)
+detect_structures_on_page(out_path, include_crops=True, out_dir=...)
+recognize_region(page_image_path, x, y, w, h)
+```
+
+MolDetv2 returns bounding boxes with scores; read each crop with your
+vision to verify what the detector boxed before recognition commits a
+structure. This is how compound discovery works on structure-grid pages.
+
 ## 4. Read measurements
 
 ```

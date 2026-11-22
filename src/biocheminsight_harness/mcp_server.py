@@ -336,6 +336,49 @@ def create_server():
         return {"task_id": task_id, "status": t.get("status")}
 
     @mcp.tool()
+    def detect_structures_on_page(page_image_path: str,
+                                  conf: float = 0.25,
+                                  include_crops: bool = False,
+                                  out_dir: str = "") -> dict:
+        """Detect chemical structures on a rendered page image with
+        MolDetv2: returns bounding boxes (and optionally the crops) so you
+        can box-verify on the page before recognition."""
+        from .config import harness_url
+        with open(page_image_path, "rb") as handle:
+            r = httpx.post(
+                f"{harness_url().rstrip('/')}/v1/structures/detect",
+                params={"conf": conf, "include_crops": include_crops},
+                files={"file": handle}, timeout=120.0)
+        r.raise_for_status()
+        result = r.json()
+        if out_dir and include_crops:
+            from pathlib import Path
+            import base64 as _b64
+            out = Path(out_dir)
+            out.mkdir(parents=True, exist_ok=True)
+            for index, structure in enumerate(result.get("structures", [])):
+                crop = structure.get("crop_png_b64") or structure.get("crop")
+                if crop:
+                    (out / f"box_{index}.png").write_bytes(
+                        _b64.b64decode(crop))
+        return result
+
+    @mcp.tool()
+    def recognize_region(page_image_path: str,
+                         x: float, y: float, w: float, h: float,
+                         page: int = 1) -> dict:
+        """Recognize one user-boxed region (normalized XYWH on the page)
+        into SMILES via MolSight. Use after detect_structures_on_page to
+        confirm a box before committing the structure."""
+        from .config import harness_url
+        with open(page_image_path, "rb") as handle:
+            r = httpx.post(
+                f"{harness_url().rstrip('/')}/v1/structures/recognize",
+                files={"file": handle}, timeout=180.0)
+        r.raise_for_status()
+        return r.json()
+
+    @mcp.tool()
     def parse_sequence(document_id: str, notation: str) -> dict:
         """Document-aware sequence parse: routes antibody/enzyme chains to
         the numbering skill and HGVS strings to the variant-site skill,

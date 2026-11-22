@@ -107,6 +107,8 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 | `cancel_task` | cancel a running pipeline |
 | `parse_sequence` / `smiles_to_sequence` | sequence chemistry via deployment |
 | `verify_structure` | visual verification of a decode vs its crop |
+| `detect_structures_on_page` | MolDetv2 bounding boxes on a rendered page |
+| `recognize_region` | MolSight recognition of a boxed region |
 | `measurement_review_start` / `measurement_review_submit` | measurement review session |
 | `task_artifact_urls` | browser URLs for finished tables |
 | `batch_fail` | release a failed batch for another worker |
