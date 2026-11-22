@@ -216,16 +216,42 @@ def create_server():
     @mcp.tool()
     def start_full_pipeline(pdf_id: str, strictness: str = "strict",
                             assemble_markush: bool = True) -> str:
-        from .client import BioChemInsightClient
-        return BioChemInsightClient().start_full_pipeline(
-            pdf_id, strictness, assemble_markush)
+        """Start the extraction pipeline in agent-perception mode: the
+        connected coding agent (you) answers every vision call. The task
+        pauses at awaiting_perception when requests are pending and
+        resumes automatically once you answer them."""
+        import httpx as _httpx
+        from .config import biocheminsight_url
+        r = _httpx.post(f"{biocheminsight_url().rstrip('/')}/api/tasks/full-pipeline",
+                        json={"pdf_id": pdf_id,
+                              "structure_filter_strictness": strictness,
+                              "assemble_markush": assemble_markush,
+                              "perception_provider": "agent"}, timeout=60.0)
+        r.raise_for_status()
+        return r.json().get("task_id")
 
     @mcp.tool()
     def task_status(task_id: str) -> dict:
-        from .client import BioChemInsightClient
-        task = BioChemInsightClient().task(task_id)
-        return {"status": task.get("status"), "progress": task.get("progress"),
-                "message": task.get("message"), "error": task.get("error")}
+        """Poll a pipeline task. When status is awaiting_perception the
+        pending vision requests ride in the response: read each sheet
+        with your vision and answer via pipeline_perception_answer; the
+        task resumes on its own after the last answer."""
+        import httpx as _httpx
+        from .config import biocheminsight_url
+        base = biocheminsight_url().rstrip("/")
+        r = _httpx.get(f"{base}/api/tasks/{task_id}", timeout=30.0)
+        r.raise_for_status()
+        task = r.json()
+        out = {"status": task.get("status"), "progress": task.get("progress"),
+               "message": task.get("message"), "error": task.get("error")}
+        if task.get("status") == "awaiting_perception":
+            pr = _httpx.get(f"{base}/api/tasks/{task_id}/perception/requests",
+                            timeout=30.0).json()
+            out["awaiting_perception"] = {
+                "pending": pr.get("pending", 0),
+                "requests": pr.get("requests", []),
+            }
+        return out
 
     @mcp.tool()
     def download_task_result(task_id: str, dest_dir: str) -> str:
