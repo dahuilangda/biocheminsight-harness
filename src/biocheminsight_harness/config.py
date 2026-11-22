@@ -41,6 +41,15 @@ def harness_url() -> str:
                     "http://127.0.0.1:8011")
 
 
+def perception_batch_size() -> int:
+    raw = os.environ.get("BIOCHEMINSIGHT_PERCEPTION_BATCH", "")
+    try:
+        size = int(raw)
+    except ValueError:
+        size = 8
+    return max(1, size)
+
+
 def save_deployment(url: str, ocr_url: str | None = None,
                     harness_url_override: str | None = None) -> dict:
     _CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)

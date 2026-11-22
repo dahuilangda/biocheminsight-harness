@@ -121,15 +121,17 @@ def create_server():
 
     @mcp.tool()
     def pipeline_perception_requests(task_id: str) -> list[dict]:
-        """Vision calls the server pipeline awaits for this task: read each
-        rendered sheet with your own vision and answer via
-        pipeline_perception_answer."""
+        """Next bounded batch of vision calls the server pipeline awaits
+        for this task (perception_batch_size, default 8). Read each
+        sheet with your own vision, answer via pipeline_perception_answer,
+        then call again for the next batch."""
         from .config import biocheminsight_url
+        from .perception import batch_requests
         r = httpx.get(
             f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}/perception/requests",
             timeout=30.0, **_authed())
         r.raise_for_status()
-        requests = r.json().get("requests", [])
+        requests = batch_requests(r.json().get("requests", []))
         for request in requests:
             request["sheet_url"] = (f"{biocheminsight_url().rstrip('/')}"
                                     f"/api/tasks/{task_id}/perception/requests/"
@@ -267,12 +269,14 @@ def create_server():
 
     @mcp.tool()
     def task_status(task_id: str) -> dict:
-        """Poll a pipeline task. When status is awaiting_perception the
-        pending vision requests ride in the response: read each sheet
-        with your vision and answer via pipeline_perception_answer; the
-        task resumes on its own after the last answer."""
+        """Poll a pipeline task. When status is awaiting_perception a
+        bounded batch of the pending vision requests (perception_batch_size,
+        default 8) rides in the response with `pending` as the true total:
+        read each sheet, answer via pipeline_perception_answer, poll again.
+        The task resumes on its own after the last answer."""
         import httpx as _httpx
         from .config import biocheminsight_url
+        from .perception import batch_requests
         base = biocheminsight_url().rstrip("/")
         r = _httpx.get(f"{base}/api/tasks/{task_id}", timeout=30.0, **_authed())
         r.raise_for_status()
@@ -282,7 +286,7 @@ def create_server():
         if task.get("status") == "awaiting_perception":
             pr = _httpx.get(f"{base}/api/tasks/{task_id}/perception/requests",
                             timeout=30.0, **_authed()).json()
-            requests = pr.get("requests", [])
+            requests = batch_requests(pr.get("requests", []))
             for request in requests:
                 request["sheet_url"] = (
                     f"{base}/api/tasks/{task_id}/perception/requests/"

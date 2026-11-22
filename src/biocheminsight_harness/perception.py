@@ -49,6 +49,20 @@ def assess_quality(markdown: str) -> dict[str, Any]:
 def needs_escalation(quality: dict) -> bool:
     return quality["quality"] in ("empty", "poor", "degenerate")
 
+def batch_requests(requests: list[dict], limit: int | None = None) -> list[dict]:
+    """Next batch of pending perception requests to answer. Bounded
+    because every sheet is one image in the answering agent's context;
+    ordered task_name first so one batch stays inside one answer
+    contract. Answered requests drop out, so re-polling yields the
+    next batch."""
+    if limit is None:
+        from .config import perception_batch_size
+        limit = perception_batch_size()
+    ordered = sorted(
+        requests,
+        key=lambda r: (str(r.get("task_name", "")), str(r.get("request_id", ""))))
+    return ordered[:max(1, int(limit))]
+
 class PerceptionRouter:
     """Splits pages between paddle OCR and agent vision.
 

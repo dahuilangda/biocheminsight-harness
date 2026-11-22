@@ -13,17 +13,20 @@ Requires `BIOCHEMINSIGHT_URL` reachable.
 2. `start_full_pipeline(pdf_id, strictness="strict", assemble_markush=true)`
    → `task_id`.
 3. Poll `task_status(task_id)` every ~30 s. The stages in order:
-
-4. If the status is `awaiting_perception`: fetch each pending request's
-   `sheet_url`, read the image with your vision, and post the answer via
-   `pipeline_perception_answer(task_id, request_id, <JSON per the
-   request's contract>)`. The task resumes on its own. Repeat until
-   `completed`.
-5. Download results and build the extraction report.   structure page detection → assay page discovery → measurement review →
+   structure page detection → assay page discovery → measurement review →
    structure extraction → merge.
-4. On `completed`: `download_task_result(task_id, "out/")` → zip with
+4. If the status is `awaiting_perception`: the response carries a
+   bounded batch of the pending requests, each with a `sheet_url`. Fetch
+   that batch's sheets, read each image with your vision, and post
+   answers via `pipeline_perception_answer(task_id, request_id, <JSON
+   per the request's contract>)`. Then poll again — answered requests
+   drop out and the next batch appears — until `completed`. Never fetch
+   every pending sheet at once: each one is an image your context must
+   carry. On a long backlog, answer per batch from a fresh subagent
+   context so the coordinating session accumulates no sheets at all.
+5. On `completed`: `download_task_result(task_id, "out/")` → zip with
    `structures.csv`, `bioactivity.csv`, `merged_results.csv`, audit trail.
-5. `build_extraction_report("out/", "report.md", title)`; read `report.md`
+6. `build_extraction_report("out/", "report.md", title)`; read `report.md`
    and present the findings.
 
 ## Exit criteria

@@ -3,6 +3,7 @@ import httpx
 from biocheminsight_harness.perception import (
     PerceptionRouter,
     assess_quality,
+    batch_requests,
     needs_escalation,
 )
 
@@ -61,3 +62,29 @@ def test_route_pages_escalates_degenerate_paddle_output(tmp_path, monkeypatch):
     out = router.route_pages(pdf, [1, 2])
     assert 1 in out["agent_pages"]
     assert 1 not in out["markdowns"]
+
+
+def test_batch_requests_bounds_and_orders():
+    requests = [
+        {"request_id": "c3", "task_name": "structure_to_id"},
+        {"request_id": "b2", "task_name": "classify_structure_candidate"},
+        {"request_id": "a1", "task_name": "classify_structure_candidate"},
+        {"request_id": "d4", "task_name": "structure_to_id"},
+    ]
+    batch = batch_requests(requests, limit=2)
+    assert [r["request_id"] for r in batch] == ["a1", "b2"]
+    assert batch_requests(requests, limit=10) == [
+        {"request_id": "a1", "task_name": "classify_structure_candidate"},
+        {"request_id": "b2", "task_name": "classify_structure_candidate"},
+        {"request_id": "c3", "task_name": "structure_to_id"},
+        {"request_id": "d4", "task_name": "structure_to_id"},
+    ]
+    assert len(batch_requests(requests, limit=0)) == 1
+
+
+def test_batch_requests_default_reads_env(monkeypatch):
+    requests = [{"request_id": str(i), "task_name": "t"} for i in range(5)]
+    monkeypatch.setenv("BIOCHEMINSIGHT_PERCEPTION_BATCH", "3")
+    assert len(batch_requests(requests)) == 3
+    monkeypatch.setenv("BIOCHEMINSIGHT_PERCEPTION_BATCH", "not-a-number")
+    assert len(batch_requests(requests)) == 5

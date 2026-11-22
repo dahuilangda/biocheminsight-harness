@@ -18,20 +18,9 @@ you out of your own context — no model keys are configured anywhere.
 | "我自己来看页面/不要用配置的模型" or no deployment | L2 | `levels/L2-agent-perception.md` |
 | "给我 SAR 分析/逐行验证/结构+活性+肽序列的完整报告" | L3 | `levels/L3-sar-analysis.md` |
 
-Read only the level file you need. L2 and L3 assume L1's server setup
-(`upload_pdf`, task lifecycle) unless no deployment is reachable.
-
-## Tools by level
-
-- **L1** — `upload_pdf`, `start_full_pipeline`, `task_status`,
-  `download_task_result`, `build_extraction_report`, `open_review_workspace`.
-- **L2** — `render_pages`, `render_page`, `ocr_pages`,
-  `record_structure_detection`, `record_measurement_discovery`,
-  `record_assay_reconciliation`.
-- **L3** — `parse_peptide_notation`, `resolve_peptide_notation`,
-  `peptide_fragment_forms`, `mass_arbitration`, `sar_build`, `sar_analysis`,
-  plus every L2 tool and the report contract in
-  `references/report-format.md`.
+Read only the level file you need. Each level exposes its own tools
+and contracts; L2 and L3 assume L1's server setup (`upload_pdf`, task
+lifecycle) unless no deployment is reachable.
 
 ## Hard rules (all levels)
 

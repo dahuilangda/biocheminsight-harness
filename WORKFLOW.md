@@ -125,14 +125,19 @@ build_extraction_report(task_dir, out_path)
 ```
 
 The run declares agent perception: when `task_status` returns
-`awaiting_perception`, the pending vision calls ride in the response —
-each carries a `sheet_url`; download it, read the image with your
-vision, answer with `pipeline_perception_answer`, and the task resumes
-on its own. Repeat until `completed`. This works across hosts: the
-deployment and the agent need no shared filesystem — PDF upload goes
-through `upload_pdf`, sheets come back over HTTP, results download as
-a zip. Answer only from what is visibly printed; an unreadable call
-stays a named gap.
+`awaiting_perception`, a bounded batch of the pending vision calls
+rides in the response, each with a `sheet_url`. Download the batch's
+sheets, read each image, answer with `pipeline_perception_answer`,
+then poll again — answered requests drop out and the next batch
+appears, until `completed`. The batch bound is a context budget:
+every sheet read stays in your context as an image, so on a long
+backlog answer each batch from a fresh subagent context and let the
+coordinating session carry text only. Several requests may share one
+sheet — read it once, answer each contract against it. This works
+across hosts: the deployment and the agent need no shared filesystem
+— PDF upload goes through `upload_pdf`, sheets come back over HTTP,
+results download as a zip. Answer only from what is visibly printed;
+an unreadable call stays a named gap.
 
 The report names every gap: unreadable charts, unknown tokens, rejected
 readings. A finished run with named gaps is a success; a silent drop is
