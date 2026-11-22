@@ -104,6 +104,13 @@ upload_pdf → start_full_pipeline → task_status → download_task_result
 build_extraction_report(task_dir, out_path)
 ```
 
+The run declares agent perception: when `task_status` returns
+`awaiting_perception`, the pending vision calls ride in the response —
+read each `sheet` image with your vision, answer with
+`pipeline_perception_answer`, and the task resumes on its own. Repeat
+until `completed`. Answer only from what is visibly printed; an
+unreadable call stays a named gap.
+
 The report names every gap: unreadable charts, unknown tokens, rejected
 readings. A finished run with named gaps is a success; a silent drop is
 a bug.

@@ -114,13 +114,14 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 
 ## Perception routing
 
-The deployment picks its perception provider by runtime, automatically:
-inside Claude Code, Codex, ZCode, OpenCode or DSH the coding agent reads
-pages with its own vision (zero model calls); a standalone deployment
-uses the configured vision model. Set `PERCEPTION_PROVIDER=agent|gemma`
-to override the detection explicitly. Pending vision requests surface
-as named requests the agent answers via
-`pipeline_perception_requests` / `pipeline_perception_answer`.
+Mode is declared by the caller, not sniffed: `start_full_pipeline`
+always declares agent perception — the pipeline pauses at
+`awaiting_perception` whenever a vision call needs an answer, the
+pending requests ride in `task_status`, and the task resumes on its
+own after the last answer. Standalone API callers get the configured
+vision model by default and never see the protocol. The
+`pipeline_perception_requests` / `pipeline_perception_answer` tools
+remain for agents that prefer explicit polling.
 
 ## Configuration
 
