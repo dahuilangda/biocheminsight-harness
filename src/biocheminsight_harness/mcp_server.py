@@ -112,24 +112,27 @@ def create_server():
     # --- OCR ---
 
     @mcp.tool()
-    def pipeline_perception_requests() -> list[dict]:
-        """Vision calls the server pipeline awaits when its perception
-        provider is set to agent mode: read each rendered sheet with your
-        own vision and answer via pipeline_perception_answer."""
-        from .config import harness_url
-        r = httpx.get(f"{harness_url().rstrip('/')}/v1/harness/perception/requests",
-                      timeout=30.0)
+    def pipeline_perception_requests(task_id: str) -> list[dict]:
+        """Vision calls the server pipeline awaits for this task: read each
+        rendered sheet with your own vision and answer via
+        pipeline_perception_answer."""
+        from .config import biocheminsight_url
+        r = httpx.get(
+            f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}/perception/requests",
+            timeout=30.0)
         r.raise_for_status()
         return r.json().get("requests", [])
 
     @mcp.tool()
-    def pipeline_perception_answer(request_id: str, answer: str) -> dict:
+    def pipeline_perception_answer(task_id: str, request_id: str,
+                                   answer: str) -> dict:
         """Submit your answer for one pending pipeline perception request.
-        The answer must satisfy the task's own output contract (return the
-        JSON the prompt asks for, verbatim)."""
-        from .config import harness_url
+        The answer must satisfy the request's own output contract (return
+        the JSON the prompt asks for, verbatim). The task resumes on its
+        own after the last pending request is answered."""
+        from .config import biocheminsight_url
         r = httpx.post(
-            f"{harness_url().rstrip('/')}/v1/harness/perception/{request_id}/answer",
+            f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}/perception/{request_id}/answer",
             json={"answer": answer}, timeout=30.0)
         r.raise_for_status()
         return r.json()
@@ -266,6 +269,72 @@ def create_server():
     def build_extraction_report(task_dir: str, out_path: str,
                                 title: str = "") -> str:
         return str(report.build_report(task_dir, out_path, title))
+
+    @mcp.tool()
+    def task_tables(task_id: str, table: str = "structures") -> list[dict]:
+        """Read a finished run's table inline: structures, assays, merged
+        or sar. Returns the CSV rows as objects — no file download
+        needed for quick inspection."""
+        import httpx as _httpx
+        from .config import biocheminsight_url
+        allowed = {"structures", "assays", "merged", "sar"}
+        if table not in allowed:
+            raise ValueError(f"table must be one of {sorted(allowed)}")
+        r = _httpx.get(
+            f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}/{table}",
+            timeout=60.0)
+        r.raise_for_status()
+        payload = r.json()
+        return payload.get("rows") or payload.get(table) or payload.get("results") or []
+
+    @mcp.tool()
+    def cancel_task(task_id: str) -> dict:
+        """Cancel a running pipeline task."""
+        import httpx as _httpx
+        from .config import biocheminsight_url
+        r = _httpx.post(
+            f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}/cancel",
+            timeout=30.0)
+        r.raise_for_status()
+        t = r.json()
+        return {"task_id": task_id, "status": t.get("status")}
+
+    @mcp.tool()
+    def parse_sequence(document_id: str, notation: str) -> dict:
+        """Document-aware sequence parse: routes antibody/enzyme chains to
+        the numbering skill and HGVS strings to the variant-site skill,
+        filed under the document ledger."""
+        from .config import harness_url
+        r = httpx.post(f"{harness_url().rstrip('/')}/v1/harness/parse-sequence",
+                       json={"document_id": document_id, "notation": notation},
+                       timeout=120.0)
+        r.raise_for_status()
+        return r.json()
+
+    @mcp.tool()
+    def smiles_to_sequence(smiles: str) -> dict:
+        """Deterministic cyclic-peptide SMILES to ordered residue list via
+        the deployment vocabulary (incl. 4Pal, Trp7Cl, aMeS, ACPC, Nle,
+        PipOH, Hyp, NMeG, 7azaTrp, Sbridge, pseudoproline)."""
+        from .config import harness_url
+        r = httpx.post(
+            f"{harness_url().rstrip('/')}/v1/peptides/smiles-to-sequence",
+            files={"file": ("smiles.txt", smiles.encode())}, timeout=120.0)
+        r.raise_for_status()
+        return r.json()
+
+    @mcp.tool()
+    def verify_structure(smiles: str, image_path: str) -> dict:
+        """Cross-check a decoded SMILES against its source crop with the
+        deployment's visual verifier."""
+        from .config import harness_url
+        with open(image_path, "rb") as handle:
+            r = httpx.post(
+                f"{harness_url().rstrip('/')}/v1/harness/verify-structure",
+                files={"file": handle},
+                data={"smiles": smiles}, timeout=180.0)
+        r.raise_for_status()
+        return r.json()
 
     @mcp.tool()
     def open_review_workspace(task_id: str) -> dict:
