@@ -7,6 +7,7 @@ agent processes coordinate without a shared server."""
 from __future__ import annotations
 
 import json
+import os
 import random
 from pathlib import Path
 from typing import Any
@@ -116,7 +117,10 @@ class BatchLedger:
                     attempts_file.read_text(encoding="utf-8")) + 1
             except ValueError:
                 attempts = 1
-        attempts_file.write_text(json.dumps(attempts), encoding="utf-8")
+        tmp = str(attempts_file) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(attempts))
+        os.replace(tmp, str(attempts_file))
         if token.is_dir():
             if attempts > max_attempts:
                 raise ValueError(

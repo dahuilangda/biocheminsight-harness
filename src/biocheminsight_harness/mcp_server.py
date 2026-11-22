@@ -223,18 +223,25 @@ def create_server():
     def resolve_peptide_notation(notation: str,
                                  declared_mass: float | None = None,
                                  form: str = "", seq_id: str = "",
-                                 smiles_reading: str = "") -> dict:
+                                 smiles_reading: str = "",
+                                 ion_mz: float | None = None,
+                                 ion_charge: int | None = None) -> dict:
         return chemistry.resolve_notation(notation, declared_mass, form,
-                                          seq_id, smiles_reading)
+                                          seq_id, smiles_reading,
+                                          ion_mz=ion_mz,
+                                          ion_charge=ion_charge)
 
     @mcp.tool()
     def peptide_fragment_forms(smiles: str) -> dict:
         return chemistry.fragment_forms(smiles)
 
     @mcp.tool()
-    def mass_arbitration(smiles: str, declared_mass: float,
-                         tolerance: float = 0.8) -> dict:
-        return chemistry.mass_arbitration(smiles, declared_mass, tolerance)
+    def mass_arbitration(smiles: str, declared_mass: float | None = None,
+                         tolerance: float = 0.8,
+                         ion_mz: float | None = None,
+                         ion_charge: int | None = None) -> dict:
+        return chemistry.mass_arbitration(smiles, declared_mass, tolerance,
+                                          ion_mz=ion_mz, ion_charge=ion_charge)
 
     @mcp.tool()
     def upload_pdf(path: str) -> str:
@@ -357,16 +364,20 @@ def create_server():
 
     @mcp.tool()
     def recognize_region(page_image_path: str,
-                         x: float, y: float, w: float, h: float,
-                         page: int = 1) -> dict:
-        """Decode one boxed region of a rendered page into SMILES. The
-        region is specified in the image's pixel coordinates. Use after
-        detection to confirm and commit a structure."""
+                         x: int, y: int, w: int, h: int) -> dict:
+        """Decode one boxed region (pixel coordinates) of a rendered page
+        into SMILES. Crops the region before recognition."""
+        from PIL import Image
+        import io as _io
+        img = Image.open(page_image_path)
+        region = img.crop((x, y, x + w, y + h))
+        buf = _io.BytesIO()
+        region.save(buf, format="PNG")
+        buf.seek(0)
         from .config import harness_url
-        with open(page_image_path, "rb") as handle:
-            r = httpx.post(
-                f"{harness_url().rstrip('/')}/v1/structures/recognize",
-                files={"file": handle}, timeout=180.0)
+        r = httpx.post(
+            f"{harness_url().rstrip('/')}/v1/structures/recognize",
+            files={"file": ("region.png", buf, "image/png")}, timeout=180.0)
         r.raise_for_status()
         return r.json()
 

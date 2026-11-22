@@ -22,11 +22,17 @@ def parse_notation(notation: str, timeout: float = 60.0) -> Any:
 def resolve_notation(notation: str, declared_mass: float | None = None,
                      form: str = "", seq_id: str = "",
                      smiles_reading: str = "",
+                     ion_mz: float | None = None,
+                     ion_charge: int | None = None,
                      timeout: float = 120.0) -> Any:
     payload = {"notation": notation, "form": form, "seq_id": seq_id,
                "smiles_reading": smiles_reading}
     if declared_mass is not None:
         payload["declared_mass"] = declared_mass
+    if ion_mz is not None:
+        payload["ion_mz"] = ion_mz
+    if ion_charge is not None:
+        payload["ion_charge"] = ion_charge
     return _post("/v1/harness/resolve-row", payload, timeout)
 
 
@@ -34,9 +40,16 @@ def fragment_forms(smiles: str, timeout: float = 60.0) -> Any:
     return _post("/v1/harness/fragment-forms", {"smiles": smiles}, timeout)
 
 
-def mass_arbitration(smiles: str, declared_mass: float,
+def mass_arbitration(smiles: str, declared_mass: float | None = None,
                      tolerance: float = 0.8,
+                     ion_mz: float | None = None,
+                     ion_charge: int | None = None,
                      timeout: float = 60.0) -> Any:
-    return _post("/v1/harness/mass-arbitration",
-                 {"smiles": smiles, "declared_mass": declared_mass,
-                  "tolerance": tolerance}, timeout)
+    payload = {"smiles": smiles, "tolerance": tolerance}
+    if declared_mass is not None:
+        payload["declared_mass"] = declared_mass
+    if ion_mz is not None:
+        payload["ion_mz"] = ion_mz
+    if ion_charge is not None:
+        payload["ion_charge"] = ion_charge
+    return _post("/v1/harness/mass-arbitration", payload, timeout)

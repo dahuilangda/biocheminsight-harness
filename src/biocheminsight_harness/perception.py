@@ -18,7 +18,7 @@ import re
 from typing import Any
 
 from .config import paddleocr_url
-from .ocr import OcrClient
+from .ocr import OcrClient, OcrJobCanceled
 
 AGENT_PAGE_TYPES = frozenset({
     "rotated_table",
@@ -77,6 +77,8 @@ class PerceptionRouter:
             try:
                 markdowns.update(
                     self.client.pages_markdown(pdf_path, batch))
+            except OcrJobCanceled:
+                raise
             except Exception:
                 failed_pages.extend(batch)
         for page in failed_pages:
