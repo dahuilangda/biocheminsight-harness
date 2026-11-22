@@ -20,7 +20,12 @@ from .config import biocheminsight_url, harness_url, paddleocr_url
 from . import frontend
 
 def _authed():
-    return {"auth": auth_credentials()} if auth_credentials() else {}
+    creds = auth_credentials()
+    kwargs = {}
+    if creds:
+        kwargs["auth"] = creds
+    kwargs["verify"] = False
+    return kwargs
 
 
 def create_server():
@@ -31,25 +36,25 @@ def create_server():
     # --- deployment configuration ---
 
     @mcp.tool()
-    def configure_deployment(url: str, paddle_url: str = "",
+    def configure_deployment(url: str, ocr_url: str = "",
                              harness_url_override: str = "",
                              user: str = "", password: str = "") -> dict:
         """Connect the harness to a BioChemInsight deployment. Saves the
         URLs and optional basic-auth credentials so subsequent tool calls
         use this deployment."""
         from .config import save_deployment, save_auth
-        cfg = save_deployment(url, paddle_url or None,
+        cfg = save_deployment(url, ocr_url or None,
                               harness_url_override or None)
         if user and password:
             save_auth(user, password)
         return {"configured": True,
                 "biocheminsight_url": cfg.get("biocheminsight_url", url),
-                "paddleocr_url": cfg.get("paddleocr_url", "")}
+                "ocr_url": cfg.get("ocr_url", "")}
 
     @mcp.tool()
     def deployment_status() -> dict:
         """Check connectivity to every configured BioChemInsight endpoint:
-        pipeline API, harness chemistry, paddle OCR."""
+        pipeline API, harness chemistry, OCR service."""
         def probe(url: str) -> bool:
             try:
                 return httpx.get(url, timeout=5, **_authed()).is_success
@@ -64,14 +69,14 @@ def create_server():
         except Exception:
             harness_ok = False
         try:
-            from .config import paddleocr_url
-            paddle_ok = probe(f"{paddleocr_url().rstrip('/')}/healthz")
+            from .config import ocr_url
+            paddle_ok = probe(f"{ocr_url().rstrip('/')}/healthz")
         except Exception:
             paddle_ok = False
         return {"biocheminsight_url": base,
                 "pipeline": pipeline_ok,
                 "harness_chemistry": harness_ok,
-                "paddle_ocr": paddle_ok,
+                "ocr_service": paddle_ok,
                 "connected": pipeline_ok}
 
     # --- perception round-trip ---
@@ -190,10 +195,10 @@ def create_server():
     @mcp.tool()
     def route_pages(pdf_path: str, pages: list[int],
                     page_types: dict[str, str] | None = None) -> dict:
-        """Split pages between paddle OCR and your own vision. Keys of
-        page_types are page numbers (as strings); types in
-        {rotated_table, compound_table, dense_layout} go to vision, the
-        rest go to paddle with quality escalation back to you."""
+        """Route pages to the deployment's OCR service or to your own
+        vision, based on page type. Types in {rotated_table,
+        compound_table, dense_layout} go to vision; the rest go to OCR
+        with quality escalation back to you."""
         from .perception import PerceptionRouter
         types = {}
         for key, value in (page_types or {}).items():
@@ -340,9 +345,9 @@ def create_server():
                                   conf: float = 0.25,
                                   include_crops: bool = False,
                                   out_dir: str = "") -> dict:
-        """Detect chemical structures on a rendered page image with
-        MolDetv2: returns bounding boxes (and optionally the crops) so you
-        can box-verify on the page before recognition."""
+        """Detect chemical structure bounding boxes on a rendered page
+        image. Returns box coordinates and scores; optionally include the
+        cropped images for verification."""
         from .config import harness_url
         with open(page_image_path, "rb") as handle:
             r = httpx.post(
@@ -367,9 +372,9 @@ def create_server():
     def recognize_region(page_image_path: str,
                          x: float, y: float, w: float, h: float,
                          page: int = 1) -> dict:
-        """Recognize one user-boxed region (normalized XYWH on the page)
-        into SMILES via MolSight. Use after detect_structures_on_page to
-        confirm a box before committing the structure."""
+        """Decode one boxed region of a rendered page into SMILES. The
+        region is specified in the image's pixel coordinates. Use after
+        detection to confirm and commit a structure."""
         from .config import harness_url
         with open(page_image_path, "rb") as handle:
             r = httpx.post(

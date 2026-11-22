@@ -16,7 +16,7 @@ class BioChemInsightClient:
         self.base_url = (base_url or biocheminsight_url()).rstrip("/")
         self.timeout = timeout
         self.auth = auth if auth is not None else auth_credentials()
-        self.http = http or httpx.Client(timeout=timeout, auth=self.auth)
+        self.http = http or httpx.Client(timeout=timeout, auth=self.auth, verify=False)
 
     def upload_pdf(self, path: str | Path) -> str:
         with open(path, "rb") as handle:
