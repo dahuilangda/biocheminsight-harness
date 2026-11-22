@@ -255,9 +255,14 @@ def create_server():
         if task.get("status") == "awaiting_perception":
             pr = _httpx.get(f"{base}/api/tasks/{task_id}/perception/requests",
                             timeout=30.0).json()
+            requests = pr.get("requests", [])
+            for request in requests:
+                request["sheet_url"] = (
+                    f"{base}/api/tasks/{task_id}/perception/requests/"
+                    f"{request['request_id']}/sheet")
             out["awaiting_perception"] = {
                 "pending": pr.get("pending", 0),
-                "requests": pr.get("requests", []),
+                "requests": requests,
             }
         return out
 
