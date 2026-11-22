@@ -24,5 +24,5 @@ Requires `BIOCHEMINSIGHT_URL` reachable.
 
 ## Notes
 
-- The deployment runs its own models; no keys are needed from you.
+- Vision calls route to the connected coding agent (declared per task); no keys are needed from you.
 - If the deployment is unreachable, switch to L2 (agent perception mode).
