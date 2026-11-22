@@ -59,6 +59,12 @@ MolDetv2 returns bounding boxes with scores; read each crop with your
 vision to verify what the detector boxed before recognition commits a
 structure. This is how compound discovery works on structure-grid pages.
 
+Perception requests from these stages carry their task contract in the
+request's `task_name` — `structure_to_id` asks for the printed compound
+ID/name inside the box, `read_measurement_table` for table rows, and so
+on. Answer in that contract's JSON shape; the deterministic chemistry
+(assembly, mass arbitration, SAR join) validates everything downstream.
+
 ## 4. Read measurements
 
 ```
