@@ -5,14 +5,24 @@ Requires `BIOCHEMINSIGHT_URL` reachable.
 
 ## Steps
 
+0. Configure the deployment connection (requires all three endpoints
+   reachable): `configure_deployment(url, ocr_url, user, password)` then
+   verify with `deployment_status()` — all three probes must be true.
+
 1. `upload_pdf(path)` → `pdf_id`.
 2. `start_full_pipeline(pdf_id, strictness="strict", assemble_markush=true)`
    → `task_id`.
 3. Poll `task_status(task_id)` every ~30 s. The stages in order:
-   structure page detection → assay page discovery → measurement review →
+
+4. If the status is `awaiting_perception`: fetch each pending request's
+   `sheet_url`, read the image with your vision, and post the answer via
+   `pipeline_perception_answer(task_id, request_id, <JSON per the
+   request's contract>)`. The task resumes on its own. Repeat until
+   `completed`.
+5. Download results and build the extraction report.   structure page detection → assay page discovery → measurement review →
    structure extraction → merge.
 4. On `completed`: `download_task_result(task_id, "out/")` → zip with
-   `structures.csv`, `assays.csv`, `merged.csv`, audit trail.
+   `structures.csv`, `bioactivity.csv`, `merged_results.csv`, audit trail.
 5. `build_extraction_report("out/", "report.md", title)`; read `report.md`
    and present the findings.
 

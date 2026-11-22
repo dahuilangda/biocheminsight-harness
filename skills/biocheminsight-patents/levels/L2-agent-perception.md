@@ -51,3 +51,16 @@ failure is reported as a named gap.
 
 - `detected_pages`, `selected_pages` and `assay_names` recorded.
 - Every unreadable page is in the named-gap list with its reason.
+
+
+## Boxing structures
+
+```
+render_page(pdf_path, page, out_path, dpi=200)
+detect_structures_on_page(out_path, include_crops=True, out_dir="crops/")
+recognize_region(crop_path, x, y, w, h)
+verify_structure(smiles, crop_path)
+```
+
+Read each crop to confirm the detection before recognition. Submit
+decisions via `record_structure_detection`.

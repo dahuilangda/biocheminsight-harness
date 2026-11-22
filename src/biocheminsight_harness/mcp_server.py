@@ -460,8 +460,9 @@ def create_server():
         return sar_mod.build_sar_table(structures, measurements)
 
     @mcp.tool()
-    def sar_analysis(sar_rows: list[dict]) -> list[str]:
-        return sar_mod.sar_summary(sar_rows)
+    def sar_analysis(sar_rows: list[dict],
+                     higher_is_better: dict[str, bool] | None = None) -> dict:
+        return sar_mod.sar_summary(sar_rows, higher_is_better)
 
     @mcp.tool()
     def verify_extraction(readings: list[dict],

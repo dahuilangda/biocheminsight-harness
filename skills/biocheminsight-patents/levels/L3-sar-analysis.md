@@ -38,7 +38,7 @@ configured model keys, drive the review session:
    first prompt. Write your answers to files that do NOT match
    `review_<id>_*.txt` in `out_dir` (that pattern is reserved for
    prompts); pass each answer file to `measurement_review_submit`.
-   extract prompt file.
+   extract the prompt file.
 2. Answer it as the model would (the observation JSON per
    `references/report-format.md` contracts); write the raw answer to a
    file.
@@ -72,3 +72,24 @@ with mass deltas and conventions, the named-gap list, and a coverage line
   verbatim from readings; they are not normalized by you.
 - Report potencies with their units and assay context (which endpoint, which
   cell line) — a number without its endpoint is not a finding.
+
+
+## Ion arbitration
+
+For rows with observed ESI-MS m/z and charge state, pass `ion_mz` and
+`ion_charge` to `resolve_peptide_notation` or `mass_arbitration`. The
+deployment converts m/z×z − z×proton to a neutral mass and arbitrates
+against both monoisotopic and average conventions.
+
+## Cross-validation
+
+`verify_extraction(readings, key_fields)` cross-checks independent
+readings of the same source. `verify_dual_source(notation_smiles,
+ocsr_smiles)` checks InChIKey agreement between two independent
+structure readings. Never pass the same string twice.
+
+## Sequence tools
+
+`parse_sequence(document_id, notation)` routes to the numbering or
+variant-site skill. `smiles_to_sequence(smiles)` reverses a cyclic
+peptide SMILES to its ordered residue list.
