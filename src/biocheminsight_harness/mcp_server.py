@@ -387,6 +387,8 @@ def create_server():
         r = httpx.post(f"{harness_url().rstrip('/')}/v1/harness/parse-sequence",
                        json={"document_id": document_id, "notation": notation},
                        timeout=120.0, **_authed())
+        if r.status_code == 422:
+            return {"error": (r.json().get("detail") or r.text[:200])}
         r.raise_for_status()
         return r.json()
 

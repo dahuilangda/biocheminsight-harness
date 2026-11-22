@@ -15,7 +15,8 @@ class PageDecision(BaseModel):
     reason: str = ""
     page_type: Literal[
         "prose", "compound_table", "rotated_table", "dense_layout",
-        "sequence", "assay_chart", "definition", "other"] | None = None
+        "sequence", "assay_chart", "assay_table", "assay_prose",
+        "structure_drawing", "definition", "other"] | None = None
 
 
 class StructureDetection(BaseModel):
