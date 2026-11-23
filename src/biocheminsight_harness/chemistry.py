@@ -5,12 +5,13 @@ from typing import Any
 
 import httpx
 
-from .config import harness_url
+from .config import auth_credentials, harness_url
 
 
 def _post(path: str, payload: dict[str, Any], timeout: float) -> Any:
     response = httpx.post(f"{harness_url().rstrip('/')}{path}",
-                          json=payload, timeout=timeout)
+                          json=payload, timeout=timeout,
+                          auth=auth_credentials(), verify=False)
     response.raise_for_status()
     return response.json()
 

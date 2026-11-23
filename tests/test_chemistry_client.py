@@ -23,7 +23,7 @@ def harness_http(monkeypatch):
 
     transport = httpx.MockTransport(handler)
     monkeypatch.setattr(httpx, "post",
-                        lambda url, json=None, timeout=None:
+                        lambda url, json=None, timeout=None, **kw:
                         httpx.Client(transport=transport).post(url, json=json,
                                                                timeout=timeout))
 
@@ -39,5 +39,29 @@ def test_mass_arbitration_round_trip(harness_http):
     assert verdict["convention"] == "exact"
 
 
-def test_default_url_points_at_deployment():
+def test_default_url_points_at_deployment(monkeypatch):
+    monkeypatch.delenv("BIOCHEMINSIGHT_HARNESS_URL", raising=False)
+    monkeypatch.setattr("biocheminsight_harness.config._config", dict)
     assert ":8011" in harness_url()
+
+
+def test_post_carries_saved_credentials(monkeypatch):
+    monkeypatch.setattr("biocheminsight_harness.chemistry.auth_credentials",
+                        lambda: ("u", "p"))
+    captured = {}
+
+    class _Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {}
+
+    def fake_post(url, **kw):
+        captured.update(kw)
+        return _Response()
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    chemistry._post("/v1/harness/parse-notation", {}, timeout=1.0)
+    assert captured["auth"] == ("u", "p")
+    assert captured["verify"] is False
