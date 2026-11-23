@@ -56,17 +56,20 @@ MCP config (if your agent requires explicit registration):
 ```
 you ──natural language──▶ coding agent
                              │
-                ┌────────────┼────────────┐
-                ▼            ▼            ▼
-          render pages   evidence ladder  mass arbitration
-          (pdftoppm)     (RDKit)          (dual convention)
-                │            │            │
-                ▼            ▼            ▼
-          agent vision   named gaps    verified rows
+        ┌────────────────────┼────────────────────┐
+        ▼                    ▼                    ▼
+  answer perception     evidence ladder      mass arbitration
+  requests (sheets      (RDKit)              (dual convention)
+  rendered server-side)
+        │                    │                    │
+        ▼                    ▼                    ▼
+   agent vision          named gaps           verified rows
 ```
 
-The agent renders pages, reads them with its own vision, and feeds
-structured answers to the harness. Deterministic chemistry validates every
+The deployment renders pages and crops, ships every sheet with its
+question, and the agent answers from what is visibly printed. Without a
+deployment, the harness renders pages itself (`pdftoppm`/`pdfimages`) and
+the agent reads them directly. Deterministic chemistry validates every
 answer: mass arbitration rejects wrong readings, named gaps surface
 unknown tokens, chart data is transcribed from printed values only. No
 API keys, no model configuration — the coding plan's tokens are the model.
@@ -100,7 +103,7 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 | `resolve_peptide_notation` | evidence ladder + mass arbitration |
 | `peptide_fragment_forms` | backbone / cap forms |
 | `mass_arbitration` | dual-convention mass check |
-| `render_pages` / `render_page` | contact sheets / single pages |
+| `render_pages` / `render_page` | contact sheets / single pages (local mode; the deployment renders otherwise) |
 | `extract_page_images` | native chart crops for vision reading |
 | `route_pages` | paddle/vision dispatch with quality escalation |
 | `record_structure_detection` | validated page decisions |
@@ -131,8 +134,9 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 Mode is declared by the caller, not sniffed: `start_full_pipeline`
 always declares agent perception — the pipeline pauses at
 `awaiting_perception` whenever a vision call needs an answer, the
-pending requests ride in `task_status`, and the task resumes on its
-own after the last answer. Standalone API callers get the configured
+pending requests ride in `task_status` as bounded batches
+(`BIOCHEMINSIGHT_PERCEPTION_BATCH`, default 8), and the task resumes on
+its own after the last answer. Standalone API callers get the configured
 vision model by default and never see the protocol. The
 `pipeline_perception_requests` / `pipeline_perception_answer` tools
 remain for agents that prefer explicit polling.
@@ -144,6 +148,7 @@ remain for agents that prefer explicit polling.
 | `BIOCHEMINSIGHT_URL` | `http://127.0.0.1:8000` | pipeline API |
 | `BIOCHEMINSIGHT_HARNESS_URL` | `http://127.0.0.1:8011` | chemistry endpoints |
 | `PADDLEOCR_URL` | `http://127.0.0.1:8010` | paddle VL-1.6 |
+| `BIOCHEMINSIGHT_PERCEPTION_BATCH` | `8` | pending perception requests surfaced per poll |
 
 Persisted in `~/.biocheminsight/config.json` via `configure_deployment`;
 environment variables override.
