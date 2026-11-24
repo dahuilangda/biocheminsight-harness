@@ -79,6 +79,10 @@ def create_server():
     @mcp.tool()
     def render_pages(pdf_path: str, page_numbers: list[int], out_path: str,
                      columns: int = 4, thumb_width: int = 320) -> str:
+        """Render pages into one contact sheet, each panel captioned with
+        its page number. Panels are small: enough to classify a page, not
+        to read it. Pass page numbers in the order you want them laid out,
+        left to right, top to bottom."""
         return str(pages_mod.render_contact_sheet(
             pdf_path, page_numbers, out_path, columns, thumb_width))
 

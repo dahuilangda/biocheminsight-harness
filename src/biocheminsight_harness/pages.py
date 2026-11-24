@@ -107,11 +107,14 @@ def render_page(pdf_path: str | Path, page: int, out_path: str | Path,
 def render_contact_sheet(pdf_path: str | Path, pages: list[int],
                          out_path: str | Path, columns: int = 4,
                          thumb_width: int = 320, dpi: int = 100) -> Path:
-    from PIL import Image
+    """One contact sheet of the given pages, four columns by default, each
+    panel captioned with its page number."""
+    from PIL import Image, ImageDraw
 
     _require("pdftoppm")
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
+    caption = max(18, thumb_width // 14)
     thumbs: list[tuple[int, Image.Image]] = []
     with tempfile.TemporaryDirectory(prefix="bch-sheets-") as tmp:
         tmp_path = Path(tmp)
@@ -133,14 +136,20 @@ def render_contact_sheet(pdf_path: str | Path, pages: list[int],
         if not thumbs:
             raise RuntimeError("contact sheet produced nothing")
 
-        cell_height = max(image.height for _, image in thumbs)
+        cell_height = max(image.height for _, image in thumbs) + caption
         rows = -(-len(thumbs) // columns)
         sheet = Image.new("RGB",
                           (columns * thumb_width, rows * cell_height),
                           "white")
+        draw = ImageDraw.Draw(sheet)
         for index, (page, image) in enumerate(thumbs):
-            sheet.paste(image, ((index % columns) * thumb_width,
-                                (index // columns) * cell_height))
+            left = (index % columns) * thumb_width
+            top = (index // columns) * cell_height
+            draw.rectangle((left, top, left + thumb_width, top + caption),
+                           fill="black")
+            draw.text((left + caption // 3, top + caption // 6), f"p. {page}",
+                      fill="white")
+            sheet.paste(image, (left, top + caption))
         sheet.save(out)
     return out
 
