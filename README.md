@@ -152,3 +152,8 @@ remain for agents that prefer explicit polling.
 
 Persisted in `~/.biocheminsight/config.json` via `configure_deployment`;
 environment variables override.
+
+When the harness runs on the deployment's own host, point the two URLs at
+a local address. A public name that resolves to a relay costs 1-5 s per call
+and turns a 2 MB upload into many seconds; `deployment_status` reports the
+round-trip time of each endpoint and says so.

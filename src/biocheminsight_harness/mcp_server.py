@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -71,30 +72,42 @@ def create_server():
     @mcp.tool()
     def deployment_status() -> dict:
         """Check connectivity to every configured BioChemInsight endpoint:
-        pipeline API, harness chemistry, OCR service."""
-        def probe(url: str) -> bool:
+        pipeline API, harness chemistry, OCR service. Reports each probe's
+        round-trip time and warns when the deployment answers slowly, which
+        makes uploads and the many small calls of a parse run take minutes."""
+        def probe(url: str) -> tuple[bool, float]:
+            started = time.monotonic()
             try:
-                return httpx.get(url, timeout=5, **_authed()).is_success
+                ok = httpx.get(url, timeout=5, **_authed()).is_success
             except Exception:
-                return False
+                ok = False
+            return ok, round((time.monotonic() - started) * 1000)
 
         base = biocheminsight_url().rstrip("/")
-        pipeline_ok = probe(f"{base}/api/tasks")
+        pipeline_ok, pipeline_ms = probe(f"{base}/api/tasks")
         try:
-            from .config import harness_url
-            harness_ok = probe(f"{harness_url().rstrip('/')}/healthz")
+            from .config import harness_url, ocr_url
+            harness_ok, harness_ms = probe(f"{harness_url().rstrip('/')}/healthz")
+            paddle_ok, paddle_ms = probe(f"{ocr_url().rstrip('/')}/healthz")
         except Exception:
-            harness_ok = False
-        try:
-            from .config import ocr_url
-            paddle_ok = probe(f"{ocr_url().rstrip('/')}/healthz")
-        except Exception:
-            paddle_ok = False
-        return {"biocheminsight_url": base,
-                "pipeline": pipeline_ok,
-                "harness_chemistry": harness_ok,
-                "ocr_service": paddle_ok,
-                "connected": pipeline_ok}
+            harness_ok, paddle_ok = False, False
+            harness_ms = paddle_ms = 0
+        out = {"biocheminsight_url": base,
+               "pipeline": pipeline_ok,
+               "harness_chemistry": harness_ok,
+               "ocr_service": paddle_ok,
+               "connected": pipeline_ok,
+               "roundtrip_ms": {"pipeline": pipeline_ms,
+                                "harness_chemistry": harness_ms,
+                                "ocr_service": paddle_ms}}
+        slow = [ms for ok, ms in ((pipeline_ok, pipeline_ms), (harness_ok, harness_ms))
+                if ok and ms > 1000]
+        if slow:
+            out["note"] = ("The deployment answers in over a second per call. A parse "
+                           "makes many small calls and uploads the PDF, so this adds up. "
+                           "If the harness runs on the deployment's own host, set "
+                           "BIOCHEMINSIGHT_URL to a local address.")
+        return out
 
     @mcp.tool()
     def render_pages(pdf_path: str, page_numbers: list[int], out_path: str,
