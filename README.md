@@ -22,10 +22,12 @@ where your BioChemInsight deployment is:
 
 Credentials are saved to `~/.biocheminsight/config.json` and used for
 every call (or set `BIOCHEMINSIGHT_USER` / `BIOCHEMINSIGHT_PASS`).
-Perception calls block up to `PERCEPTION_WAIT_SECONDS` (default 60)
-waiting for your answer; unanswered calls escalate to the task's
-`awaiting_perception` state and the run resumes automatically once you
-answer them.
+Keep polling while requests are pending: a perception call waits as long
+as `task_status` keeps asking about the task and continues in place the
+moment its answer lands. After `PERCEPTION_WAIT_SECONDS` (default 60)
+without a poll the task moves to `awaiting_perception`, and the run
+starts again from the top once you answer, replaying every answered
+request from the cache.
 
 Then ask:
 
