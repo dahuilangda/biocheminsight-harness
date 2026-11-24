@@ -41,7 +41,7 @@ variables — the agent handles all of it.
 ```bash
 git clone https://github.com/dahuilangda/biocheminsight-harness.git
 cd biocheminsight-harness
-pip install -e ".[mcp,dev]"
+pip install -e ".[dev]"
 export BIOCHEMINSIGHT_URL=http://your-server:8000
 ```
 
