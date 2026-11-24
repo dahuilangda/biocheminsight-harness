@@ -29,6 +29,12 @@ def _authed():
     return kwargs
 
 
+_IDLE_NOTES = {
+    "awaiting_perception": "All answers are in and the task is being resumed. Keep polling.",
+    "pending": "The task is queued or starting; its next requests appear here. Keep polling.",
+}
+
+
 def _pending_perception(task_id: str) -> tuple[list[dict], int]:
     """Next bounded batch of the task's unanswered requests, and the true
     number still pending. Each request carries a `sheet_url`; the server's
@@ -299,7 +305,8 @@ def create_server():
         requests, a bounded batch of them (perception_batch_size, default 8)
         rides in the response with `pending` as the true total: download each
         sheet from `sheet_url`, read it, answer via pipeline_perception_answer,
-        then poll again. The task resumes on its own after the last answer."""
+        then poll again. The task resumes on its own after the last answer;
+        while it waits or starts with nothing to answer, `note` says so."""
         import httpx as _httpx
         from .config import biocheminsight_url
         base = biocheminsight_url().rstrip("/")
@@ -311,6 +318,8 @@ def create_server():
         requests, pending = _pending_perception(task_id)
         if requests or pending:
             out["awaiting_perception"] = {"pending": pending, "requests": requests}
+        elif task.get("status") in _IDLE_NOTES:
+            out["note"] = _IDLE_NOTES[task["status"]]
         return out
 
     @mcp.tool()

@@ -70,3 +70,25 @@ def test_status_keeps_the_block_when_only_the_total_is_known(deployment):
     pending.update(requests=[])
     out = tools["task_status"]("t1")
     assert out["awaiting_perception"] == {"pending": 12, "requests": []}
+
+
+@pytest.mark.parametrize("status, note", [
+    ("awaiting_perception", "All answers are in and the task is being resumed. Keep polling."),
+    ("pending", "The task is queued or starting; its next requests appear here. Keep polling."),
+])
+def test_status_says_what_an_idle_task_is_doing(deployment, status, note):
+    tools, _calls, pending, task = deployment
+    pending["requests"], pending["pending"] = [], 0
+    task["status"] = status
+
+    out = tools["task_status"]("t1")
+
+    assert "awaiting_perception" not in out
+    assert out["note"] == note
+
+
+def test_status_adds_no_note_to_a_running_task(deployment):
+    tools, _calls, pending, _task = deployment
+    pending["requests"], pending["pending"] = [], 0
+
+    assert "note" not in tools["task_status"]("t1")
