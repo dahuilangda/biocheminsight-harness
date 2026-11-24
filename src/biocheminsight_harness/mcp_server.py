@@ -27,6 +27,26 @@ def _authed():
     kwargs["verify"] = False
     return kwargs
 
+
+def _pending_perception(task_id: str) -> tuple[list[dict], int]:
+    """Next bounded batch of the task's unanswered requests, and the true
+    number still pending. Each request carries a `sheet_url`; the server's
+    own file path is dropped because it is only meaningful on the server."""
+    from .config import biocheminsight_url
+    from .perception import batch_requests
+    base = biocheminsight_url().rstrip("/")
+    response = httpx.get(
+        f"{base}/api/tasks/{task_id}/perception/requests", timeout=30.0, **_authed())
+    response.raise_for_status()
+    payload = response.json()
+    requests = batch_requests(payload.get("requests", []))
+    for request in requests:
+        request.pop("sheet", None)
+        request["sheet_url"] = (
+            f"{base}/api/tasks/{task_id}/perception/requests/"
+            f"{request['request_id']}/sheet")
+    return requests, int(payload.get("pending", 0) or 0)
+
 def create_server():
     from mcp.server.fastmcp import FastMCP
 
@@ -125,22 +145,11 @@ def create_server():
 
     @mcp.tool()
     def pipeline_perception_requests(task_id: str) -> list[dict]:
-        """Next bounded batch of vision calls the server pipeline awaits
-        for this task (perception_batch_size, default 8). Read each
-        sheet with your own vision, answer via pipeline_perception_answer,
-        then call again for the next batch."""
-        from .config import biocheminsight_url
-        from .perception import batch_requests
-        r = httpx.get(
-            f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}/perception/requests",
-            timeout=30.0, **_authed())
-        r.raise_for_status()
-        requests = batch_requests(r.json().get("requests", []))
-        for request in requests:
-            request["sheet_url"] = (f"{biocheminsight_url().rstrip('/')}"
-                                    f"/api/tasks/{task_id}/perception/requests/"
-                                    f"{request['request_id']}/sheet")
-        return requests
+        """Next bounded batch of the vision requests this task awaits
+        (perception_batch_size, default 8). `task_status` already returns the
+        same batch on every poll; call this only to pull the next batch
+        without a status poll."""
+        return _pending_perception(task_id)[0]
 
     @mcp.tool()
     def fetch_perception_sheet(task_id: str, request_id: str,
@@ -273,32 +282,22 @@ def create_server():
 
     @mcp.tool()
     def task_status(task_id: str) -> dict:
-        """Poll a pipeline task. When status is awaiting_perception a
-        bounded batch of the pending vision requests (perception_batch_size,
-        default 8) rides in the response with `pending` as the true total:
-        read each sheet, answer via pipeline_perception_answer, poll again.
-        The task resumes on its own after the last answer."""
+        """Poll a pipeline task. Whenever the task has unanswered vision
+        requests, a bounded batch of them (perception_batch_size, default 8)
+        rides in the response with `pending` as the true total: download each
+        sheet from `sheet_url`, read it, answer via pipeline_perception_answer,
+        then poll again. The task resumes on its own after the last answer."""
         import httpx as _httpx
         from .config import biocheminsight_url
-        from .perception import batch_requests
         base = biocheminsight_url().rstrip("/")
         r = _httpx.get(f"{base}/api/tasks/{task_id}", timeout=30.0, **_authed())
         r.raise_for_status()
         task = r.json()
         out = {"status": task.get("status"), "progress": task.get("progress"),
                "message": task.get("message"), "error": task.get("error")}
-        if task.get("status") == "awaiting_perception":
-            pr = _httpx.get(f"{base}/api/tasks/{task_id}/perception/requests",
-                            timeout=30.0, **_authed()).json()
-            requests = batch_requests(pr.get("requests", []))
-            for request in requests:
-                request["sheet_url"] = (
-                    f"{base}/api/tasks/{task_id}/perception/requests/"
-                    f"{request['request_id']}/sheet")
-            out["awaiting_perception"] = {
-                "pending": pr.get("pending", 0),
-                "requests": requests,
-            }
+        requests, pending = _pending_perception(task_id)
+        if requests or pending:
+            out["awaiting_perception"] = {"pending": pending, "requests": requests}
         return out
 
     @mcp.tool()
