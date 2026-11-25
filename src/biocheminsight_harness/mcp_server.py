@@ -37,8 +37,10 @@ _IDLE_NOTES = {
 
 def _pending_perception(task_id: str) -> tuple[list[dict], int]:
     """Next bounded batch of the task's unanswered requests, and the true
-    number still pending. Each request carries a `sheet_url`; the server's
-    own file path is dropped because it is only meaningful on the server."""
+    number still pending. A request about an image carries a `sheet_url`;
+    one without it is a text question whose `prompt` is the whole request.
+    The server's own file path is dropped because it is only meaningful
+    on the server."""
     from .config import biocheminsight_url
     from .perception import batch_requests
     base = biocheminsight_url().rstrip("/")
@@ -48,10 +50,10 @@ def _pending_perception(task_id: str) -> tuple[list[dict], int]:
     payload = response.json()
     requests = batch_requests(payload.get("requests", []))
     for request in requests:
-        request.pop("sheet", None)
-        request["sheet_url"] = (
-            f"{base}/api/tasks/{task_id}/perception/requests/"
-            f"{request['request_id']}/sheet")
+        if request.pop("sheet", None):
+            request["sheet_url"] = (
+                f"{base}/api/tasks/{task_id}/perception/requests/"
+                f"{request['request_id']}/sheet")
     return requests, int(payload.get("pending", 0) or 0)
 
 def create_server():
@@ -305,8 +307,11 @@ def create_server():
         requests, a bounded batch of them (perception_batch_size, default 8)
         rides in the response with `pending` as the true total: download each
         sheet from `sheet_url`, read it, answer via pipeline_perception_answer,
-        then poll again. The task resumes on its own after the last answer;
-        while it waits or starts with nothing to answer, `note` says so."""
+        then poll again; a request without `sheet_url` is a text question
+        whose `prompt` is the whole request, and its `rejected_answers`
+        explain any reply of yours that broke the contract. The task
+        resumes on its own after the last answer; while it waits or starts
+        with nothing to answer, `note` says so."""
         import httpx as _httpx
         from .config import biocheminsight_url
         base = biocheminsight_url().rstrip("/")

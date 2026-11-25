@@ -24,7 +24,9 @@ Credentials are saved to `~/.biocheminsight/config.json` and used for
 every call (or set `BIOCHEMINSIGHT_USER` / `BIOCHEMINSIGHT_PASS`).
 Keep polling while requests are pending: a perception call waits as long
 as `task_status` keeps asking about the task and continues in place the
-moment its answer lands. After `PERCEPTION_WAIT_SECONDS` (default 60)
+moment its answer lands. A request without `sheet_url` is a text question
+whose `prompt` is the whole request; nothing on the server needs a model
+endpoint for a run driven this way. After `PERCEPTION_WAIT_SECONDS` (default 60)
 without a poll the task moves to `awaiting_perception`, and the run
 starts again from the top once you answer, replaying every answered
 request from the cache.
@@ -134,12 +136,13 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 ## Perception routing
 
 Mode is declared by the caller, not sniffed: `start_full_pipeline`
-always declares agent perception — the pipeline pauses at
-`awaiting_perception` whenever a vision call needs an answer, the
-pending requests ride in `task_status` as bounded batches
-(`BIOCHEMINSIGHT_PERCEPTION_BATCH`, default 8), and the task resumes on
-its own after the last answer. Standalone API callers get the configured
-vision model by default and never see the protocol. The
+always declares agent perception — every model call of the run, with an
+image or text only, becomes a request; the pipeline waits at
+`awaiting_perception` for its answer, the pending requests ride in
+`task_status` as bounded batches (`BIOCHEMINSIGHT_PERCEPTION_BATCH`,
+default 8), and the task resumes on its own after the last answer.
+Standalone API callers get the configured models by default and never
+see the protocol. The
 `pipeline_perception_requests` / `pipeline_perception_answer` tools
 remain for agents that prefer explicit polling.
 

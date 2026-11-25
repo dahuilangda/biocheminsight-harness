@@ -92,3 +92,14 @@ def test_status_adds_no_note_to_a_running_task(deployment):
     pending["requests"], pending["pending"] = [], 0
 
     assert "note" not in tools["task_status"]("t1")
+
+
+def test_a_text_question_carries_no_sheet_url(deployment):
+    tools, _calls, pending, _task = deployment
+    pending["requests"] = [{"request_id": "r9", "task_name": "route_assays_for_content",
+                            "task_id": "t1", "prompt": "Which assays does this page mention?"}]
+
+    (request,) = tools["pipeline_perception_requests"]("t1")
+
+    assert "sheet_url" not in request
+    assert request["prompt"].startswith("Which assays")
