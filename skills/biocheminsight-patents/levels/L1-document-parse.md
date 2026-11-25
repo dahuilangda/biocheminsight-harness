@@ -23,6 +23,8 @@ Requires `BIOCHEMINSIGHT_URL` reachable.
    image is a text question and its prompt is the whole request. Answer
    only from what the image or the text shows, then submit the batch
    with `perception_answers(task_id, <JSON list of {request_id, answer}>)`.
+   A sheet that shows several numbered images is answered with one
+   object keyed by the number, `{"1": {...}, "2": {...}}`.
    Call again until nothing is pending and the status is `completed`.
    Never take more than one batch at a time: each sheet is an image your
    context must carry. On a long backlog, answer per batch from a fresh

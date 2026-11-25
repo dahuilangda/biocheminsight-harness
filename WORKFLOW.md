@@ -138,8 +138,9 @@ is a text question and its prompt is the whole request.
 The batch bound is a context budget: every sheet stays in your context
 as an image, so on a long backlog answer each batch from a fresh
 subagent context and let the coordinating session carry text only.
-Several requests may share one sheet — read it once, answer each
-contract against it. This works across hosts: the deployment and the
+Images asked the same question come several to one sheet, each under
+a band with its number, and are answered with one JSON object keyed by
+the number, `{"1": {...}, "2": {...}}`. This works across hosts: the deployment and the
 agent need no shared filesystem — PDF upload goes through
 `upload_pdf`, sheets come back over MCP, results download as a zip.
 Answer only from what is visibly printed; an unreadable call stays a

@@ -335,9 +335,11 @@ def create_server():
         """Next batch of the task's unanswered requests, ready to answer: for
         each request a text block with its id, task name, prompt and any
         earlier answer of yours that was rejected, followed by its sheet image
-        when it has one. Read every block, answer the whole batch with
-        perception_answers, then call again until nothing is pending. Pass a
-        smaller `limit` when the sheets are large."""
+        when it has one. A sheet that shows several numbered images takes
+        one object keyed by the number. Read
+        every block, answer the whole batch with perception_answers, then call
+        again until nothing is pending. Pass a smaller `limit` when the sheets
+        are large."""
         from mcp.types import ImageContent, TextContent
         requests, pending = _pending_perception(task_id)
         if limit > 0:

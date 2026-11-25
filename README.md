@@ -145,8 +145,10 @@ image or text only, becomes a request; the pipeline waits at
 answer has landed. `perception_batch` returns the pending requests as
 bounded batches (`BIOCHEMINSIGHT_PERCEPTION_BATCH`, default 8), each
 with its sheet as image content, and `perception_answers` submits a
-batch. Standalone API callers get the configured models by default and
-never see the protocol. The single-request tools
+batch. Images asked the same question come several to one sheet, each
+under a band with its number, and are answered with one JSON object
+keyed by the number. Standalone API callers get the configured models
+by default and never see the protocol. The single-request tools
 (`pipeline_perception_requests`, `fetch_perception_sheet`,
 `pipeline_perception_answer`) remain for agents that prefer them.
 
