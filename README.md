@@ -24,9 +24,11 @@ Credentials are saved to `~/.biocheminsight/config.json` and used for
 every call (or set `BIOCHEMINSIGHT_USER` / `BIOCHEMINSIGHT_PASS`).
 Keep polling while requests are pending: a perception call waits as long
 as `task_status` keeps asking about the task and continues in place the
-moment its answer lands. A request without `sheet_url` is a text question
-whose `prompt` is the whole request; nothing on the server needs a model
-endpoint for a run driven this way. After `PERCEPTION_WAIT_SECONDS` (default 60)
+moment its answer lands. `perception_batch` hands you the next requests
+with their sheets as images and `perception_answers` takes the whole
+batch back; a request without an image is a text question whose `prompt`
+is the whole request. Nothing on the server needs a model endpoint for a
+run driven this way. After `PERCEPTION_WAIT_SECONDS` (default 60)
 without a poll the task moves to `awaiting_perception`, and the run
 starts again from the top once you answer, replaying every answered
 request from the cache.
@@ -116,7 +118,8 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 | `verify_extraction` | cross-check independent readings |
 | `record_monomer_dictionary` | document-scoped residue codebook (your vision OCSR) |
 | `verify_dual_source` | InChIKey agreement for structure second-source |
-| `fetch_perception_sheet` | download a perception sheet image |
+| `perception_batch` / `perception_answers` | answer a batch of pipeline perception requests |
+| `fetch_perception_sheet` | download one perception sheet image |
 | `task_tables` | read structures/assays/merged/sar inline |
 | `cancel_task` | cancel a running pipeline |
 | `parse_sequence` / `smiles_to_sequence` | sequence chemistry via deployment |
@@ -138,13 +141,14 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 Mode is declared by the caller, not sniffed: `start_full_pipeline`
 always declares agent perception — every model call of the run, with an
 image or text only, becomes a request; the pipeline waits at
-`awaiting_perception` for its answer, the pending requests ride in
-`task_status` as bounded batches (`BIOCHEMINSIGHT_PERCEPTION_BATCH`,
-default 8), and the task resumes on its own after the last answer.
-Standalone API callers get the configured models by default and never
-see the protocol. The
-`pipeline_perception_requests` / `pipeline_perception_answer` tools
-remain for agents that prefer explicit polling.
+`awaiting_perception` for its answer and goes on by itself once every
+answer has landed. `perception_batch` returns the pending requests as
+bounded batches (`BIOCHEMINSIGHT_PERCEPTION_BATCH`, default 8), each
+with its sheet as image content, and `perception_answers` submits a
+batch. Standalone API callers get the configured models by default and
+never see the protocol. The single-request tools
+(`pipeline_perception_requests`, `fetch_perception_sheet`,
+`pipeline_perception_answer`) remain for agents that prefer them.
 
 ## Configuration
 

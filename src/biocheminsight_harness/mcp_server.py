@@ -1,6 +1,7 @@
 """MCP server: BioChemInsight tools for coding agents."""
 from __future__ import annotations
 
+import base64
 import json
 import time
 from pathlib import Path
@@ -33,6 +34,14 @@ _IDLE_NOTES = {
     "awaiting_perception": "All answers are in and the task is being resumed. Keep polling.",
     "pending": "The task is queued or starting; its next requests appear here. Keep polling.",
 }
+
+
+def _task_state(task_id: str) -> dict:
+    from .config import biocheminsight_url
+    response = httpx.get(f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}",
+                         timeout=30.0, **_authed())
+    response.raise_for_status()
+    return response.json()
 
 
 def _pending_perception(task_id: str) -> tuple[list[dict], int]:
@@ -303,21 +312,15 @@ def create_server():
 
     @mcp.tool()
     def task_status(task_id: str) -> dict:
-        """Poll a pipeline task. Whenever the task has unanswered vision
-        requests, a bounded batch of them (perception_batch_size, default 8)
-        rides in the response with `pending` as the true total: download each
-        sheet from `sheet_url`, read it, answer via pipeline_perception_answer,
-        then poll again; a request without `sheet_url` is a text question
-        whose `prompt` is the whole request, and its `rejected_answers`
-        explain any reply of yours that broke the contract. The task
-        resumes on its own after the last answer; while it waits or starts
-        with nothing to answer, `note` says so."""
-        import httpx as _httpx
-        from .config import biocheminsight_url
-        base = biocheminsight_url().rstrip("/")
-        r = _httpx.get(f"{base}/api/tasks/{task_id}", timeout=30.0, **_authed())
-        r.raise_for_status()
-        task = r.json()
+        """Poll a pipeline task. Whenever the task has unanswered requests,
+        a bounded batch of them (perception_batch_size, default 8) rides in
+        the response with `pending` as the true total. Answer them with
+        perception_batch and perception_answers; the single-request tools
+        work too, each request carrying a `sheet_url` for its image, or
+        none when it is a text question whose `prompt` is the whole
+        request. The task goes on by itself after the last answer; while
+        it waits or starts with nothing to answer, `note` says so."""
+        task = _task_state(task_id)
         out = {"status": task.get("status"), "progress": task.get("progress"),
                "message": task.get("message"), "error": task.get("error")}
         requests, pending = _pending_perception(task_id)
@@ -326,6 +329,64 @@ def create_server():
         elif task.get("status") in _IDLE_NOTES:
             out["note"] = _IDLE_NOTES[task["status"]]
         return out
+
+    @mcp.tool()
+    def perception_batch(task_id: str, limit: int = 0) -> list:
+        """Next batch of the task's unanswered requests, ready to answer: for
+        each request a text block with its id, task name, prompt and any
+        earlier answer of yours that was rejected, followed by its sheet image
+        when it has one. Read every block, answer the whole batch with
+        perception_answers, then call again until nothing is pending. Pass a
+        smaller `limit` when the sheets are large."""
+        from mcp.types import ImageContent, TextContent
+        requests, pending = _pending_perception(task_id)
+        if limit > 0:
+            requests = requests[:limit]
+        blocks = []
+        for index, request in enumerate(requests, 1):
+            sheet_url = request.pop("sheet_url", None)
+            blocks.append(TextContent(
+                type="text",
+                text=json.dumps({**request, "index": index, "batch": len(requests), "pending": pending},
+                                ensure_ascii=False)))
+            if sheet_url:
+                response = httpx.get(sheet_url, timeout=60.0, **_authed())
+                response.raise_for_status()
+                blocks.append(ImageContent(
+                    type="image", mimeType="image/png",
+                    data=base64.b64encode(response.content).decode("ascii")))
+        if blocks:
+            return blocks
+        status = _task_state(task_id)
+        return [TextContent(type="text", text=json.dumps({
+            "pending": 0, "status": status.get("status"), "progress": status.get("progress"),
+            "message": status.get("message"),
+            "note": _IDLE_NOTES.get(status.get("status"), "Nothing to answer right now. Poll again."),
+        }))]
+
+    @mcp.tool()
+    def perception_answers(task_id: str, answers: str) -> dict:
+        """Submit a batch answered from perception_batch. `answers` is a JSON
+        list of {"request_id": ..., "answer": ...}, where an answer is the
+        JSON the request's prompt asks for, as an object or as its text.
+        Returns each request's outcome and how many requests remain."""
+        from .config import biocheminsight_url
+        base = biocheminsight_url().rstrip("/")
+        items = json.loads(answers)
+        if not isinstance(items, list):
+            raise ValueError("answers must be a JSON list of {request_id, answer} objects")
+        results = []
+        for item in items:
+            request_id = str(item.get("request_id") or "")
+            answer = item.get("answer")
+            text = answer if isinstance(answer, str) else json.dumps(answer, ensure_ascii=False)
+            response = httpx.post(
+                f"{base}/api/tasks/{task_id}/perception/{request_id}/answer",
+                json={"answer": text}, timeout=30.0, **_authed())
+            outcome = (response.json() if response.headers.get("content-type", "").startswith("application/json")
+                       else {"error": response.text[:200]})
+            results.append({"request_id": request_id[:8], "ok": response.is_success, **outcome})
+        return {"results": results, "pending": _pending_perception(task_id)[1]}
 
     @mcp.tool()
     def download_task_result(task_id: str, dest_dir: str) -> str:
