@@ -12,18 +12,21 @@ Requires `BIOCHEMINSIGHT_URL` reachable.
 1. `upload_pdf(path)` → `pdf_id`.
 2. `start_full_pipeline(pdf_id, strictness="strict", assemble_markush=true)`
    → `task_id`.
-3. Poll `task_status(task_id)` every ~30 s. The stages in order:
-   structure page detection → assay page discovery → measurement review →
-   structure extraction → merge.
-4. If the status is `awaiting_perception`: the response carries a
-   bounded batch of the pending requests, each with a `sheet_url`. Fetch
-   that batch's sheets, read each image with your vision, and post
-   answers via `pipeline_perception_answer(task_id, request_id, <JSON
-   per the request's contract>)`. Then poll again — answered requests
-   drop out and the next batch appears — until `completed`. Never fetch
-   every pending sheet at once: each one is an image your context must
-   carry. On a long backlog, answer per batch from a fresh subagent
-   context so the coordinating session accumulates no sheets at all.
+3. Poll `task_status(task_id)` every ~30 s and keep polling: a request
+   waits as long as you ask and goes on the moment it is answered. The
+   stages in order: structure page detection → assay page discovery →
+   structure extraction → result tables → merge.
+4. Whenever `task_status` reports requests pending, take the next batch
+   with `perception_batch(task_id)`: every request is a text block (id,
+   task name, prompt, any earlier answer of yours that was rejected)
+   followed by its sheet image when it has one; a request without an
+   image is a text question and its prompt is the whole request. Answer
+   only from what the image or the text shows, then submit the batch
+   with `perception_answers(task_id, <JSON list of {request_id, answer}>)`.
+   Call again until nothing is pending and the status is `completed`.
+   Never take more than one batch at a time: each sheet is an image your
+   context must carry. On a long backlog, answer per batch from a fresh
+   subagent context so the coordinating session accumulates no sheets.
 5. On `completed`: `download_task_result(task_id, "out/")` → zip with
    `structures.csv`, `bioactivity.csv`, `merged_results.csv`, audit trail.
 6. `build_extraction_report("out/", "report.md", title)`; read `report.md`
@@ -37,5 +40,6 @@ Requires `BIOCHEMINSIGHT_URL` reachable.
 
 ## Notes
 
-- Vision calls route to the connected coding agent (declared per task); no keys are needed from you.
+- Every model call of the run, with an image or text only, is a request
+  for you (declared per task); the deployment needs no model keys.
 - If the deployment is unreachable, switch to L2 (agent perception mode).
