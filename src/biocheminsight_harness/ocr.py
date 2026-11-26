@@ -92,8 +92,6 @@ class OcrClient:
                 break
         if set(by_page) == set(chunk):
             return by_page
-        # Service page numbering may be relative to the extracted range;
-        # pages come back in order, so map by sorted position.
         if len(numbers) == len(chunk):
             return dict(zip(sorted(chunk), texts))
         raise RuntimeError(

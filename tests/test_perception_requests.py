@@ -48,7 +48,6 @@ def test_status_carries_requests_while_the_task_still_reports_running(deployment
     out = tools["task_status"]("t1")
     waiting = out["awaiting_perception"]
     assert waiting["pending"] == 12
-    # ordered by task name, so one batch stays inside one answer contract
     assert [r["request_id"] for r in waiting["requests"]] == ["r1", "r2"]
     assert calls.count("/api/tasks/t1/perception/requests") == 1
 
@@ -154,7 +153,6 @@ def test_the_batch_tool_returns_each_request_with_its_image(deployment, monkeypa
     server = _session(monkeypatch, get, lambda request: httpx.Response(500))
     result = _run(_call(server, "perception_batch", {"task_id": "t1"}))
 
-    # ordered by task name, so one batch stays inside one answer contract
     assert [block.type for block in result.content] == ["text", "text", "image"]
     question, image_request = (json.loads(block.text) for block in result.content[:2])
     assert (question["request_id"], question["index"], question["batch"]) == ("r2", 1, 2)
@@ -243,7 +241,6 @@ def test_a_sheet_of_images_goes_through_the_batch_tools_as_it_is(deployment, mon
     server = _session(monkeypatch, get, post)
     batch = _run(_call(server, "perception_batch", {"task_id": "t1"}))
 
-    # one sheet: its question with the list of the images it holds, then the image
     assert [block.type for block in batch.content] == ["text", "image"]
     assert json.loads(batch.content[0].text)["members"] == members
     assert base64.b64decode(batch.content[1].data) == _PNG
@@ -254,5 +251,4 @@ def test_a_sheet_of_images_goes_through_the_batch_tools_as_it_is(deployment, mon
 
     assert json.loads(answered.content[0].text)["results"] == [
         {"request_id": "s1", "ok": True, "answered": "s1", "pending": 0}]
-    # the deployment splits the keyed answer; the harness passes it on untouched
     assert posted == [{"answer": json.dumps(keyed)}]
