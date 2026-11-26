@@ -221,3 +221,38 @@ def test_a_rejected_answer_is_reported_not_raised(deployment, monkeypatch):
 
     assert json.loads(result.content[0].text)["results"] == [
         {"request_id": "r9", "ok": False, "error": "answer for roles missing required keys ['boxes']"}]
+
+
+def test_a_sheet_of_images_goes_through_the_batch_tools_as_it_is(deployment, monkeypatch):
+    members = [{"number": 1, "request_id": "m1"}, {"number": 2, "request_id": "m2"}]
+    posted = []
+
+    def get(request):
+        if request.url.path.endswith("/sheet"):
+            return httpx.Response(200, content=_PNG, headers={"content-type": "image/png"})
+        return httpx.Response(200, json={"requests": [
+            {"request_id": "s1", "task_name": "classify_structure_candidate", "task_id": "t1",
+             "prompt": "This sheet holds 2 images.", "sheet": "/app/output/.perception/requests/s1.png",
+             "members": members},
+        ], "pending": 1})
+
+    def post(request):
+        posted.append(json.loads(request.content))
+        return httpx.Response(200, json={"answered": "s1", "pending": 0})
+
+    server = _session(monkeypatch, get, post)
+    batch = _run(_call(server, "perception_batch", {"task_id": "t1"}))
+
+    # one sheet: its question with the list of the images it holds, then the image
+    assert [block.type for block in batch.content] == ["text", "image"]
+    assert json.loads(batch.content[0].text)["members"] == members
+    assert base64.b64decode(batch.content[1].data) == _PNG
+
+    keyed = {"1": {"structure_type": "markush"}, "2": {"structure_type": "noise"}}
+    answered = _run(_call(server, "perception_answers", {"task_id": "t1", "answers": json.dumps([
+        {"request_id": "s1", "answer": keyed}])}))
+
+    assert json.loads(answered.content[0].text)["results"] == [
+        {"request_id": "s1", "ok": True, "answered": "s1", "pending": 0}]
+    # the deployment splits the keyed answer; the harness passes it on untouched
+    assert posted == [{"answer": json.dumps(keyed)}]
