@@ -44,6 +44,47 @@ def _task_state(task_id: str) -> dict:
     return response.json()
 
 
+# Observed pace of each task, so task_status can estimate the remaining
+# time. Seconds count only while a task runs: the wait for perception
+# answers can last hours and says nothing about that pace.
+_ETA_SAMPLES: dict[str, dict] = {}
+_ETA_SAMPLE_LIMIT = 64
+_ETA_SAMPLE_TTL = 3600.0
+
+
+def _observe_task(task_id: str, status: str, progress: float) -> dict | None:
+    now = time.monotonic()
+    sample = _ETA_SAMPLES.get(task_id)
+    if sample is None:
+        if status in ("running", "awaiting_perception"):
+            sample = {"first_seen": now, "first_progress": progress,
+                      "active": 0.0, "last": now, "last_status": status}
+            _ETA_SAMPLES[task_id] = sample
+            while len(_ETA_SAMPLES) > _ETA_SAMPLE_LIMIT:
+                oldest = min(_ETA_SAMPLES, key=lambda key: _ETA_SAMPLES[key]["last"])
+                del _ETA_SAMPLES[oldest]
+        return sample
+    if now - sample["last"] > _ETA_SAMPLE_TTL:
+        _ETA_SAMPLES.pop(task_id, None)
+        return _observe_task(task_id, status, progress)
+    if sample["last_status"] == "running":
+        sample["active"] += now - sample["last"]
+    sample["last"], sample["last_status"] = now, status
+    return sample
+
+
+def _eta_seconds(sample, status: str, progress: float) -> int | None:
+    """Remaining seconds from the pace observed while the task ran. None
+    while there is no pace to extrapolate."""
+    if sample is None or status != "running":
+        return None
+    gained = progress - sample["first_progress"]
+    if gained <= 0.0 or sample["active"] <= 0.0:
+        return None
+    remaining = round((1.0 - progress) * sample["active"] / gained)
+    return remaining or None
+
+
 def _pending_perception(task_id: str) -> tuple[list[dict], int]:
     """Next bounded batch of the task's unanswered requests, and the true
     number still pending. A request about an image carries a `sheet_url`;
@@ -319,15 +360,30 @@ def create_server():
         work too, each request carrying a `sheet_url` for its image, or
         none when it is a text question whose `prompt` is the whole
         request. The task goes on by itself after the last answer; while
-        it waits or starts with nothing to answer, `note` says so."""
+        it waits or starts with nothing to answer, `note` says so. While
+        the task runs, `elapsed_seconds` says how long it has taken and
+        `eta_seconds` how long it is expected to still need (None until
+        its pace is known); the timestamps it carries are the
+        deployment's."""
         task = _task_state(task_id)
-        out = {"status": task.get("status"), "progress": task.get("progress"),
-               "message": task.get("message"), "error": task.get("error")}
+        status = task.get("status")
+        progress = float(task.get("progress") or 0.0)
+        sample = _observe_task(task_id, status, progress)
+        out = {"status": status, "progress": progress,
+               "message": task.get("message"), "error": task.get("error"),
+               "created_at": task.get("created_at"), "updated_at": task.get("updated_at")}
+        if task.get("queue_position") is not None:
+            out["queue_position"] = task.get("queue_position")
+        if sample is not None:
+            out["elapsed_seconds"] = round(time.monotonic() - sample["first_seen"])
+        eta = _eta_seconds(sample, status, progress)
+        if eta is not None:
+            out["eta_seconds"] = eta
         requests, pending = _pending_perception(task_id)
         if requests or pending:
             out["awaiting_perception"] = {"pending": pending, "requests": requests}
-        elif task.get("status") in _IDLE_NOTES:
-            out["note"] = _IDLE_NOTES[task["status"]]
+        elif status in _IDLE_NOTES:
+            out["note"] = _IDLE_NOTES[status]
         return out
 
     @mcp.tool()
