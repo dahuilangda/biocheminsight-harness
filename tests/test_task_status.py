@@ -124,3 +124,17 @@ def test_without_a_pace_there_is_no_estimate(monkeypatch):
 
     assert out["elapsed_seconds"] >= 0
     assert "eta_seconds" not in out
+
+
+def test_a_completed_task_returns_download_and_table_links(monkeypatch):
+    def get(request):
+        if request.url.path == "/api/tasks/t1":
+            return httpx.Response(200, json=_task(progress=1.0, status="completed", message="Completed"))
+        return httpx.Response(200, json={"requests": [], "pending": 0})
+
+    server = _session(monkeypatch, get, lambda request: httpx.Response(500))
+    out = _status(server)
+
+    assert out["result"]["download_url"] == "https://deploy.example/api/tasks/t1/download"
+    assert sorted(out["result"]["tables"]) == ["assays", "merged", "sar", "structures"]
+    assert out["result"]["tables"]["structures"] == "https://deploy.example/api/tasks/t1/structures"

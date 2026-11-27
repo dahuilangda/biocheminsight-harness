@@ -85,6 +85,17 @@ def _eta_seconds(sample, status: str, progress: float) -> int | None:
     return remaining or None
 
 
+def _result_links(task_id: str) -> dict:
+    """Download links of a finished run. The URLs answer in a browser with
+    the deployment's basic auth; download_task_result fetches the zip
+    without it."""
+    from .config import biocheminsight_url
+    base = biocheminsight_url().rstrip("/")
+    return {"download_url": f"{base}/api/tasks/{task_id}/download",
+            "tables": {name: f"{base}/api/tasks/{task_id}/{name}"
+                       for name in ("structures", "assays", "merged", "sar")}}
+
+
 def _pending_perception(task_id: str) -> tuple[list[dict], int]:
     """Next bounded batch of the task's unanswered requests, and the true
     number still pending. A request about an image carries a `sheet_url`;
@@ -363,8 +374,9 @@ def create_server():
         it waits or starts with nothing to answer, `note` says so. While
         the task runs, `elapsed_seconds` says how long it has taken and
         `eta_seconds` how long it is expected to still need (None until
-        its pace is known); the timestamps it carries are the
-        deployment's."""
+        its pace is known); once completed, `result` holds the download
+        URL and the per-table URLs, which need the deployment's basic auth
+        in a browser — download_task_result saves the zip without it."""
         task = _task_state(task_id)
         status = task.get("status")
         progress = float(task.get("progress") or 0.0)
@@ -379,6 +391,8 @@ def create_server():
         eta = _eta_seconds(sample, status, progress)
         if eta is not None:
             out["eta_seconds"] = eta
+        if status == "completed":
+            out["result"] = _result_links(task_id)
         requests, pending = _pending_perception(task_id)
         if requests or pending:
             out["awaiting_perception"] = {"pending": pending, "requests": requests}
