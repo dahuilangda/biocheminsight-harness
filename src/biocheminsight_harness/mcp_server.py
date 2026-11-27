@@ -352,15 +352,12 @@ def create_server():
         connected coding agent (you) answers every vision call. The task
         pauses at awaiting_perception when requests are pending and
         resumes automatically once you answer them."""
-        import httpx as _httpx
-        from .config import biocheminsight_url
-        r = _httpx.post(f"{biocheminsight_url().rstrip('/')}/api/tasks/full-pipeline",
-                        json={"pdf_id": pdf_id,
-                              "structure_filter_strictness": strictness,
-                              "assemble_markush": assemble_markush,
-                              "perception_provider": "agent"}, timeout=60.0, **_authed())
-        r.raise_for_status()
-        return r.json().get("task_id")
+        from .client import BioChemInsightClient
+        client = BioChemInsightClient()
+        with client.http:
+            return client.start_full_pipeline(
+                pdf_id, structure_filter_strictness=strictness, assemble_markush=assemble_markush,
+            )
 
     @mcp.tool()
     def task_status(task_id: str) -> dict:
@@ -484,6 +481,12 @@ def create_server():
         dest = BioChemInsightClient().download_result(
             task_id, Path(dest_dir) / f"{task_id}.zip")
         return str(dest)
+
+    @mcp.tool()
+    def local_task_stats(root: str = ".") -> dict:
+        """Summarize extracted task folders and result archives under an explicit local path."""
+        from .task_stats import scan_tasks
+        return scan_tasks(root)
 
     @mcp.tool()
     def build_extraction_report(task_dir: str, out_path: str,

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -29,12 +29,14 @@ class BioChemInsightClient:
     def start_full_pipeline(self, pdf_id: str,
                             structure_filter_strictness: str = "strict",
                             assemble_markush: bool = True,
-                            lang: str = "en") -> str:
+                            lang: str = "en", *,
+                            perception_provider: Literal["agent", "gemma"] = "agent") -> str:
         response = self.http.post(
             f"{self.base_url}/api/tasks/full-pipeline",
             json={"pdf_id": pdf_id,
                   "structure_filter_strictness": structure_filter_strictness,
                   "assemble_markush": assemble_markush,
+                  "perception_provider": perception_provider,
                   "lang": lang},
         )
         response.raise_for_status()

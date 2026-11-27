@@ -1,39 +1,7 @@
-# Report format
+# Report contract
 
-`build_extraction_report` produces this structure; when you write a report
-by hand, follow the same contract.
-
-```markdown
-# <title>
-
-- structures: N rows
-- assays: N rows
-- merged relationships: N rows
-- status: {"verified": n, "deferred": n, "failed": n}
-
-## Structures
-| id | smiles | page |
-|---|---|---|
-| … |
-
-## Assays
-| compound | endpoint | value | unit | page | assay |
-|---|---|---|---|---|---|
-
-## Peptide verdicts
-| seq_id | notation | form | mass | convention | delta | verdict |
-|---|---|---|---|---|---|---|
-
-## Named gaps
-- <page>: <what could not be read, verbatim reason>
-
-## Coverage
-verified M / rows N; pages covered P / total T
-```
-
-Rules:
-
-- Every number carries its page citation.
-- Every gap appears in the named-gap list; the report never silently drops
-  an unreadable page or an unknown token.
-- Potencies carry units and the assay context line from the source.
+- State the source document, task scope, and coverage. Give denominators for verified rows and inspected pages when known.
+- List complete structures by source ID, graph, and page. Include assembly provenance where applicable.
+- List measurements by verified compound, endpoint, value, unit, context, and page.
+- Include peptide notation verdicts, mass convention and delta when present.
+- List gaps by page or row with the reason and any unresolved identity or reading.

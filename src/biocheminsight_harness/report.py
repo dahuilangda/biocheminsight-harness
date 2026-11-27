@@ -77,9 +77,9 @@ def build_report(task_dir: str | Path, out_path: str | Path,
         lines.append("| id | smiles | page |")
         lines.append("|---|---|---|")
         for row in structures[:50]:
-            lines.append(f"| {_cell(row.get('compound_id'))} "
-                         f"| {_cell(row.get('smiles'), 60)} "
-                         f"| {_cell(row.get('page'))} |")
+            lines.append(f"| {_cell(row.get('COMPOUND_ID') or row.get('compound_id'))} "
+                         f"| {_cell(row.get('SMILES') or row.get('smiles'), 60)} "
+                         f"| {_cell(row.get('PAGE_NUM') or row.get('page'))} |")
         if len(structures) > 50:
             lines.append(f"| … | {len(structures) - 50} more | |")
     else:

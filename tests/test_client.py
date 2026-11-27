@@ -1,4 +1,6 @@
 """REST client behavior against a mock transport."""
+import json
+
 import httpx
 
 from biocheminsight_harness.client import BioChemInsightClient
@@ -23,12 +25,23 @@ def test_upload_returns_pdf_id(tmp_path):
     assert client.upload_pdf(pdf) == "abc123"
 
 
-def test_start_full_pipeline_and_status(tmp_path):
-    client = _client({
-        "/api/tasks/full-pipeline": {"task_id": "t1"},
-        "/api/tasks/t1": {"task_id": "t1", "status": "running",
-                          "progress": 0.5},
-    })
+def test_start_full_pipeline_and_status():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/tasks/full-pipeline":
+            assert request.method == "POST"
+            assert json.loads(request.content) == {
+                "pdf_id": "abc123",
+                "structure_filter_strictness": "strict",
+                "assemble_markush": True,
+                "perception_provider": "agent",
+                "lang": "en",
+            }
+            return httpx.Response(200, json={"task_id": "t1"})
+        assert request.url.path == "/api/tasks/t1"
+        return httpx.Response(200, json={"task_id": "t1", "status": "running", "progress": 0.5})
+
+    client = BioChemInsightClient(base_url="http://mock",
+                                 http=httpx.Client(transport=httpx.MockTransport(handler)))
     task_id = client.start_full_pipeline("abc123")
     assert task_id == "t1"
     assert client.task(task_id)["status"] == "running"
