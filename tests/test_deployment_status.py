@@ -23,7 +23,8 @@ def deployment(monkeypatch):
     transport = httpx.MockTransport(handler)
 
     def get(url, **kw):
-        kw.pop("auth", None), kw.pop("verify", None)
+        assert "auth" not in kw
+        kw.pop("verify", None)
         return httpx.Client(transport=transport).get(url, **kw)
 
     monkeypatch.setattr(mcp_server.time, "monotonic", lambda: clock[0])
@@ -34,7 +35,6 @@ def deployment(monkeypatch):
                         lambda: "https://chem.example")
     monkeypatch.setattr("biocheminsight_harness.config.ocr_url",
                         lambda: "https://ocr.example")
-    monkeypatch.setattr(mcp_server, "auth_credentials", lambda: None)
     tools = {tool.name: tool.fn for tool in mcp_server.create_server()._tool_manager.list_tools()}
     return tools["deployment_status"], latency, failing
 

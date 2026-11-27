@@ -9,8 +9,6 @@ from typing import Any
 
 import httpx
 
-from .config import auth_credentials
-
 from . import chemistry
 from . import coordination as coord
 from . import decisions as decisions_mod
@@ -21,15 +19,6 @@ from . import sar as sar_mod
 from .config import biocheminsight_url, harness_url, paddleocr_url
 from . import frontend
 
-def _authed():
-    creds = auth_credentials()
-    kwargs = {}
-    if creds:
-        kwargs["auth"] = creds
-    kwargs["verify"] = False
-    return kwargs
-
-
 _IDLE_NOTES = {
     "awaiting_perception": "All answers are in and the task is being resumed. Keep polling.",
     "pending": "The task is queued or starting; its next requests appear here. Keep polling.",
@@ -39,7 +28,7 @@ _IDLE_NOTES = {
 def _task_state(task_id: str) -> dict:
     from .config import biocheminsight_url
     response = httpx.get(f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}",
-                         timeout=30.0, **_authed())
+                         timeout=30.0, verify=False)
     response.raise_for_status()
     return response.json()
 
@@ -86,9 +75,7 @@ def _eta_seconds(sample, status: str, progress: float) -> int | None:
 
 
 def _result_links(task_id: str) -> dict:
-    """Download links of a finished run. The URLs answer in a browser with
-    the deployment's basic auth; download_task_result fetches the zip
-    without it."""
+    """Download links for a finished run."""
     from .config import biocheminsight_url
     base = biocheminsight_url().rstrip("/")
     return {"download_url": f"{base}/api/tasks/{task_id}/download",
@@ -106,7 +93,7 @@ def _pending_perception(task_id: str) -> tuple[list[dict], int]:
     from .perception import batch_requests
     base = biocheminsight_url().rstrip("/")
     response = httpx.get(
-        f"{base}/api/tasks/{task_id}/perception/requests", timeout=30.0, **_authed())
+        f"{base}/api/tasks/{task_id}/perception/requests", timeout=30.0, verify=False)
     response.raise_for_status()
     payload = response.json()
     requests = batch_requests(payload.get("requests", []))
@@ -124,16 +111,11 @@ def create_server():
 
     @mcp.tool()
     def configure_deployment(url: str, ocr_url: str = "",
-                             harness_url_override: str = "",
-                             user: str = "", password: str = "") -> dict:
-        """Connect the harness to a BioChemInsight deployment. Saves the
-        URLs and optional basic-auth credentials so subsequent tool calls
-        use this deployment."""
-        from .config import save_deployment, save_auth
+                             harness_url_override: str = "") -> dict:
+        """Save the deployment URLs used by subsequent tool calls."""
+        from .config import save_deployment
         cfg = save_deployment(url, ocr_url or None,
                               harness_url_override or None)
-        if user and password:
-            save_auth(user, password)
         return {"configured": True,
                 "biocheminsight_url": cfg.get("biocheminsight_url", url),
                 "ocr_url": cfg.get("ocr_url", "")}
@@ -147,7 +129,7 @@ def create_server():
         def probe(url: str) -> tuple[bool, float]:
             started = time.monotonic()
             try:
-                ok = httpx.get(url, timeout=5, **_authed()).is_success
+                ok = httpx.get(url, timeout=5, verify=False).is_success
             except Exception:
                 ok = False
             return ok, round((time.monotonic() - started) * 1000)
@@ -241,7 +223,7 @@ def create_server():
         from .config import biocheminsight_url
         url = (f"{biocheminsight_url().rstrip('/')}"
                f"/api/tasks/{task_id}/perception/requests/{request_id}/sheet")
-        r = httpx.get(url, timeout=60.0, **_authed())
+        r = httpx.get(url, timeout=60.0, verify=False)
         r.raise_for_status()
         from pathlib import Path
         out = Path(out_path)
@@ -259,7 +241,7 @@ def create_server():
         from .config import biocheminsight_url
         r = httpx.post(
             f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}/perception/{request_id}/answer",
-            json={"answer": answer}, timeout=30.0, **_authed())
+            json={"answer": answer}, timeout=30.0, verify=False)
         r.raise_for_status()
         return r.json()
 
@@ -278,7 +260,7 @@ def create_server():
         from .config import harness_url
         r = httpx.post(
             f"{harness_url().rstrip('/')}/v1/agent-mode/{task_session_id}/monomer-dictionary",
-            json=payload, timeout=60.0, **_authed())
+            json=payload, timeout=60.0, verify=False)
         r.raise_for_status()
         return r.json()
 
@@ -372,8 +354,7 @@ def create_server():
         the task runs, `elapsed_seconds` says how long it has taken and
         `eta_seconds` how long it is expected to still need (None until
         its pace is known); once completed, `result` holds the download
-        URL and the per-table URLs, which need the deployment's basic auth
-        in a browser — download_task_result saves the zip without it."""
+        URL and the per-table URLs. download_task_result saves the zip."""
         task = _task_state(task_id)
         status = task.get("status")
         progress = float(task.get("progress") or 0.0)
@@ -409,7 +390,7 @@ def create_server():
             f"{biocheminsight_url().rstrip('/')}/api/tasks",
             params={"status": status or "all", "sort_by": "updated_at",
                     "sort_dir": "desc", "page_size": 20},
-            timeout=30.0, **_authed())
+            timeout=30.0, verify=False)
         r.raise_for_status()
         return {"tasks": [{key: task.get(key) for key in ("task_id", "type", "status",
                                                           "progress", "message", "updated_at")}
@@ -437,7 +418,7 @@ def create_server():
                 text=json.dumps({**request, "index": index, "batch": len(requests), "pending": pending},
                                 ensure_ascii=False)))
             if sheet_url:
-                response = httpx.get(sheet_url, timeout=60.0, **_authed())
+                response = httpx.get(sheet_url, timeout=60.0, verify=False)
                 response.raise_for_status()
                 blocks.append(ImageContent(
                     type="image", mimeType="image/png",
@@ -469,7 +450,7 @@ def create_server():
             text = answer if isinstance(answer, str) else json.dumps(answer, ensure_ascii=False)
             response = httpx.post(
                 f"{base}/api/tasks/{task_id}/perception/{request_id}/answer",
-                json={"answer": text}, timeout=30.0, **_authed())
+                json={"answer": text}, timeout=30.0, verify=False)
             outcome = (response.json() if response.headers.get("content-type", "").startswith("application/json")
                        else {"error": response.text[:200]})
             results.append({"request_id": request_id[:8], "ok": response.is_success, **outcome})
@@ -505,7 +486,7 @@ def create_server():
             raise ValueError(f"table must be one of {sorted(allowed)}")
         r = _httpx.get(
             f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}/{table}",
-            timeout=60.0, **_authed())
+            timeout=60.0, verify=False)
         r.raise_for_status()
         payload = r.json()
         return payload.get("rows") or payload.get(table) or payload.get("results") or []
@@ -517,7 +498,7 @@ def create_server():
         from .config import biocheminsight_url
         r = _httpx.post(
             f"{biocheminsight_url().rstrip('/')}/api/tasks/{task_id}/cancel",
-            timeout=30.0, **_authed())
+            timeout=30.0, verify=False)
         r.raise_for_status()
         t = r.json()
         return {"task_id": task_id, "status": t.get("status")}
@@ -577,7 +558,7 @@ def create_server():
         from .config import harness_url
         r = httpx.post(f"{harness_url().rstrip('/')}/v1/harness/parse-sequence",
                        json={"document_id": document_id, "notation": notation},
-                       timeout=120.0, **_authed())
+                       timeout=120.0, verify=False)
         if r.status_code == 422:
             return {"error": (r.json().get("detail") or r.text[:200])}
         r.raise_for_status()
@@ -591,7 +572,7 @@ def create_server():
         from .config import harness_url
         r = httpx.post(
             f"{harness_url().rstrip('/')}/v1/peptides/smiles-to-sequence",
-            files={"file": ("smiles.txt", smiles.encode())}, timeout=120.0, **_authed())
+            files={"file": ("smiles.txt", smiles.encode())}, timeout=120.0, verify=False)
         r.raise_for_status()
         return r.json()
 
@@ -604,7 +585,7 @@ def create_server():
             r = httpx.post(
                 f"{harness_url().rstrip('/')}/v1/harness/verify-structure",
                 files={"file": handle},
-                data={"smiles": smiles}, timeout=180.0, **_authed())
+                data={"smiles": smiles}, timeout=180.0, verify=False)
         r.raise_for_status()
         return r.json()
 
@@ -688,7 +669,7 @@ def create_server():
         response = httpx.post(f"{base}/start",
                               json={"source": source,
                                     "max_revisions": max_revisions},
-                              timeout=60.0, **_authed())
+                              timeout=60.0, verify=False)
         response.raise_for_status()
         payload = response.json()
         session_id = payload.get("session_id")
@@ -709,7 +690,7 @@ def create_server():
         answer = Path(answer_file).read_text(encoding="utf-8")
         base = f"{harness_url().rstrip('/')}/v1/harness/measurement-review"
         response = httpx.post(f"{base}/{session_id}/submit",
-                              json={"answer": answer}, timeout=120.0, **_authed())
+                              json={"answer": answer}, timeout=120.0, verify=False)
         response.raise_for_status()
         payload = response.json()
         prompt = payload.get("prompt")

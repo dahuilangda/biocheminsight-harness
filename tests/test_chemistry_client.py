@@ -45,9 +45,9 @@ def test_default_url_points_at_deployment(monkeypatch):
     assert ":8011" in harness_url()
 
 
-def test_post_carries_saved_credentials(monkeypatch):
-    monkeypatch.setattr("biocheminsight_harness.chemistry.auth_credentials",
-                        lambda: ("u", "p"))
+def test_post_does_not_send_legacy_credentials(monkeypatch):
+    monkeypatch.setenv("BIOCHEMINSIGHT_USER", "legacy-user")
+    monkeypatch.setenv("BIOCHEMINSIGHT_PASS", "legacy-password")
     captured = {}
 
     class _Response:
@@ -63,5 +63,5 @@ def test_post_carries_saved_credentials(monkeypatch):
 
     monkeypatch.setattr(httpx, "post", fake_post)
     chemistry._post("/v1/harness/parse-notation", {}, timeout=1.0)
-    assert captured["auth"] == ("u", "p")
+    assert "auth" not in captured
     assert captured["verify"] is False

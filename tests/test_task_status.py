@@ -18,14 +18,14 @@ def _session(monkeypatch, get, post):
     transport = httpx.MockTransport(lambda request: get(request) if request.method == "GET" else post(request))
 
     def call(client_method, url, **kw):
-        kw.pop("auth", None), kw.pop("verify", None)
+        assert "auth" not in kw
+        kw.pop("verify", None)
         return getattr(httpx.Client(transport=transport), client_method)(url, **kw)
 
     monkeypatch.setattr(httpx, "get", lambda url, **kw: call("get", url, **kw))
     monkeypatch.setattr(httpx, "post", lambda url, **kw: call("post", url, **kw))
     monkeypatch.setattr("biocheminsight_harness.config.biocheminsight_url",
                         lambda: "https://deploy.example")
-    monkeypatch.setattr("biocheminsight_harness.config.auth_credentials", lambda: None)
     return mcp_server.create_server()._mcp_server
 
 

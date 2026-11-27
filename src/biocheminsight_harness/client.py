@@ -6,17 +6,15 @@ from typing import Any, Literal
 
 import httpx
 
-from .config import auth_credentials, biocheminsight_url
+from .config import biocheminsight_url
 
 
 class BioChemInsightClient:
     def __init__(self, base_url: str | None = None, timeout: float = 60.0,
-                 auth: tuple[str, str] | None = None,
                  http: httpx.Client | None = None):
         self.base_url = (base_url or biocheminsight_url()).rstrip("/")
         self.timeout = timeout
-        self.auth = auth if auth is not None else auth_credentials()
-        self.http = http or httpx.Client(timeout=timeout, auth=self.auth, verify=False)
+        self.http = http or httpx.Client(timeout=timeout, verify=False)
 
     def upload_pdf(self, path: str | Path) -> str:
         with open(path, "rb") as handle:

@@ -17,11 +17,9 @@ The agent clones, installs, and registers the MCP server. Then tell it
 where your BioChemInsight deployment is:
 
 ```
-连接到 https://your-host:6066，用户 biochem，密码 <部署时设置的密码>
+连接到 https://your-host:6066
 ```
 
-Credentials are saved to `~/.biocheminsight/config.json` and used for
-every call (or set `BIOCHEMINSIGHT_USER` / `BIOCHEMINSIGHT_PASS`).
 Keep polling while requests are pending: a perception call waits as long
 as `task_status` keeps asking about the task and continues in place the
 moment its answer lands. `perception_batch` hands you the next requests
