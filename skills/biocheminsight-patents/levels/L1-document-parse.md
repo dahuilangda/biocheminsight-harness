@@ -13,9 +13,10 @@ Requires `BIOCHEMINSIGHT_URL` reachable.
 2. `start_full_pipeline(pdf_id, strictness="strict", assemble_markush=true)`
    → `task_id`.
 3. Poll `task_status(task_id)` every ~30 s and keep polling: a request
-   waits as long as you ask and goes on the moment it is answered. The
-   stages in order: structure page detection → assay page discovery →
-   structure extraction → result tables → merge.
+   waits as long as you ask and goes on the moment it is answered; the
+   response carries `eta_seconds` once the pace is known. The stages in
+   order: structure page detection → assay page discovery → structure
+   extraction → result tables → merge.
 4. Whenever `task_status` reports requests pending, take the next batch
    with `perception_batch(task_id)`: every request is a text block (id,
    task name, prompt, any earlier answer of yours that was rejected)
@@ -29,8 +30,10 @@ Requires `BIOCHEMINSIGHT_URL` reachable.
    Never take more than one batch at a time: each sheet is an image your
    context must carry. On a long backlog, answer per batch from a fresh
    subagent context so the coordinating session accumulates no sheets.
-5. On `completed`: `download_task_result(task_id, "out/")` → zip with
-   `structures.csv`, `bioactivity.csv`, `merged_results.csv`, audit trail.
+5. On `completed`: the response's `result` block lists the download URL
+   and per-table links; `download_task_result(task_id, "out/")` saves
+   the zip with `structures.csv`, `bioactivity.csv`,
+   `merged_results.csv`, audit trail.
 6. `build_extraction_report("out/", "report.md", title)`; read `report.md`
    and present the findings.
 

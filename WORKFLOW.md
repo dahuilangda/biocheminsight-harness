@@ -133,7 +133,12 @@ block, answer the whole batch with `perception_answers`, and call
 again until nothing is pending and the task is `completed`. Keep
 polling while the task runs: a perception call waits as long as you
 do, and goes on the moment its answer lands. A request with no image
-is a text question and its prompt is the whole request.
+is a text question and its prompt is the whole request. While it runs,
+`task_status` carries `elapsed_seconds` and `eta_seconds`; once it is
+`completed`, it carries a `result` block whose `download_url` (with the
+deployment's basic auth in a browser) and `download_task_result` both
+fetch the results zip, and `task_tables` reads structures, assays,
+merged or sar inline.
 
 The batch bound is a context budget: every sheet stays in your context
 as an image, so on a long backlog answer each batch from a fresh

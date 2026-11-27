@@ -130,7 +130,7 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 | `task_artifact_urls` | browser URLs for finished tables |
 | `batch_fail` | release a failed batch for another worker |
 | `ocr_pages` | paddle VL-1.6 markdown |
-| `upload_pdf` / `start_full_pipeline` / `task_status` / `download_task_result` | server pipeline |
+| `upload_pdf` / `start_full_pipeline` / `task_status` / `task_list` / `download_task_result` | server pipeline; `task_status` carries elapsed/eta while running and the download and table links once completed |
 | `build_extraction_report` | markdown report |
 | `batch_partition` / `batch_claim` / `batch_complete` / `batch_merge` | parallel coordination |
 | `sar_build` / `sar_analysis` | SAR table and potency ranking |
@@ -151,6 +151,11 @@ keyed by the number. Standalone API callers get the configured models
 by default and never see the protocol. The single-request tools
 (`pipeline_perception_requests`, `fetch_perception_sheet`,
 `pipeline_perception_answer`) remain for agents that prefer them.
+`task_status` passes the deployment's timestamps and queue position,
+adds `elapsed_seconds` and `eta_seconds` while the task runs (the
+estimate learns its pace and leaves the perception waits out), and on
+completion returns a `result` block with the download URL and the
+per-table URLs. `task_list` shows the deployment's recent tasks.
 
 ## Configuration
 

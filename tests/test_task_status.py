@@ -138,3 +138,26 @@ def test_a_completed_task_returns_download_and_table_links(monkeypatch):
     assert out["result"]["download_url"] == "https://deploy.example/api/tasks/t1/download"
     assert sorted(out["result"]["tables"]) == ["assays", "merged", "sar", "structures"]
     assert out["result"]["tables"]["structures"] == "https://deploy.example/api/tasks/t1/structures"
+
+
+def test_task_list_trims_each_task_and_filters_by_status(monkeypatch):
+    seen = {}
+
+    def get(request):
+        seen["query"] = dict(request.url.params)
+        return httpx.Response(200, json={"tasks": [
+            {"task_id": "t1", "type": "full_pipeline", "status": "completed", "progress": 1.0,
+             "message": "Completed", "updated_at": "2026-11-27T09:00:00", "result_path": "/x", "params": {}},
+            {"task_id": "t2", "type": "structures", "status": "running", "progress": 0.4,
+             "message": "Working", "updated_at": "2026-11-27T09:30:00", "result_path": None, "params": {}},
+        ]})
+
+    server = _session(monkeypatch, get, lambda request: httpx.Response(500))
+    out = json.loads(_run(_call(server, "task_list", {"status": "running"})).content[0].text)
+
+    # the deployment filters on the status; the tool passes the query
+    # through and trims each task to what a caller needs
+    assert seen["query"]["status"] == "running"
+    assert [task["task_id"] for task in out["tasks"]] == ["t1", "t2"]
+    assert set(out["tasks"][0]) == {"task_id", "type", "status", "progress",
+                                    "message", "updated_at"}

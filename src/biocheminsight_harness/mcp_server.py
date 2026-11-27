@@ -401,6 +401,24 @@ def create_server():
         return out
 
     @mcp.tool()
+    def task_list(status: str = "") -> dict:
+        """Recent pipeline tasks of the deployment, latest first: each with
+        id, type, status, progress, message, updated_at. `status` narrows
+        to one status (running, awaiting_perception, completed, failed).
+        This is the deployment's whole queue, not only the tasks you
+        started."""
+        from .config import biocheminsight_url
+        r = httpx.get(
+            f"{biocheminsight_url().rstrip('/')}/api/tasks",
+            params={"status": status or "all", "sort_by": "updated_at",
+                    "sort_dir": "desc", "page_size": 20},
+            timeout=30.0, **_authed())
+        r.raise_for_status()
+        return {"tasks": [{key: task.get(key) for key in ("task_id", "type", "status",
+                                                          "progress", "message", "updated_at")}
+                          for task in r.json().get("tasks") or []]}
+
+    @mcp.tool()
     def perception_batch(task_id: str, limit: int = 0) -> list:
         """Next batch of the task's unanswered requests, ready to answer: for
         each request a text block with its id, task name, prompt and any
