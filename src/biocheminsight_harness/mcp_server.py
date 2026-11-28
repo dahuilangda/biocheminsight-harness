@@ -363,7 +363,16 @@ def create_server():
         with client.http:
             return client.start_full_pipeline(
                 pdf_id, structure_filter_strictness=strictness, assemble_markush=assemble_markush,
+                perception_provider="agent",
             )
+
+    @mcp.tool()
+    def start_sar_recovery(task_id: str, max_actions: int = 8) -> str:
+        """Start evidence recovery with the calling agent answering perception requests."""
+        from .client import BioChemInsightClient
+        client = BioChemInsightClient()
+        with client.http:
+            return client.start_sar_recovery(task_id, max_actions)
 
     @mcp.tool()
     def task_status(task_id: str) -> dict:

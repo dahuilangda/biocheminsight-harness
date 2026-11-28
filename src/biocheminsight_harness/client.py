@@ -42,6 +42,14 @@ class BioChemInsightClient:
 
 
 
+    def start_sar_recovery(self, task_id: str, max_actions: int = 8) -> str:
+        response = self.http.post(
+            f"{self.base_url}/api/tasks/{task_id}/sar/recover",
+            json={"max_actions": max_actions, "perception_provider": "agent"},
+        )
+        response.raise_for_status()
+        return response.json()["task_id"]
+
     def task(self, task_id: str) -> dict[str, Any]:
         response = self.http.get(f"{self.base_url}/api/tasks/{task_id}")
         response.raise_for_status()

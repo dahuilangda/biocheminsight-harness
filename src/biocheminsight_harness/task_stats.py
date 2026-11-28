@@ -145,6 +145,11 @@ def _dashboard(tasks: list[dict], totals: dict, metric: str, without_tables: int
     ):
         print("  ".join(f"{METRICS[key]} {totals[key]:,}" for key in keys))
     print(f"No result tables {without_tables}  Read errors {error_count}")
+    molecules = totals["molecule_rows"]
+    if molecules:
+        coverage = (molecules - totals["missing_ids"]) / molecules
+        review = totals["review_rows"] / molecules
+        print(f"ID coverage {coverage:.1%}  Review flags {review:.1%} of molecule rows")
     if not tasks:
         return
     print()

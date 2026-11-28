@@ -48,3 +48,14 @@ def test_start_full_pipeline_and_status():
 
 
 
+
+
+def test_recovery_keeps_perception_in_the_calling_session():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/tasks/source/sar/recover"
+        assert json.loads(request.content) == {"max_actions": 4, "perception_provider": "agent"}
+        return httpx.Response(200, json={"task_id": "recovery"})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        client = BioChemInsightClient(base_url="http://mock", http=http)
+        assert client.start_sar_recovery("source", 4) == "recovery"
