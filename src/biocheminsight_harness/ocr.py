@@ -1,4 +1,4 @@
-"""Serial-admission OCR client for the paddle VL-1.6 service."""
+"""Serial-admission OCR client"""
 from __future__ import annotations
 
 import time
@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from .config import paddleocr_url
+from .config import ocr_url
 
 
 class OcrJobCanceled(RuntimeError):
@@ -17,7 +17,7 @@ class OcrJobCanceled(RuntimeError):
 class OcrClient:
     def __init__(self, base_url: str | None = None, timeout: float = 600.0,
                  chunk_pages: int = 3):
-        self.base_url = (base_url or paddleocr_url()).rstrip("/")
+        self.base_url = (base_url or ocr_url()).rstrip("/")
         self.timeout = timeout
         self.chunk_pages = chunk_pages
 
@@ -25,7 +25,7 @@ class OcrClient:
                        lang: str = "en") -> dict[int, str]:
         """OCR the requested pages in consecutive chunks. Chunks must be
         contiguous: non-consecutive sets are split into sub-chunks so each
-        paddle job covers a contiguous page range."""
+        OCR job covers a contiguous page range."""
         markdowns: dict[int, str] = {}
         ordered = sorted(dict.fromkeys(int(p) for p in pages))
         chunks: list[list[int]] = []
@@ -63,7 +63,7 @@ class OcrClient:
         job = response.json()
         job_id = job.get("job_id")
         if not job_id:
-            raise RuntimeError(f"paddle submit returned no job id: {job}")
+            raise RuntimeError(f"OCR submission returned no job id: {job}")
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
             status = httpx.get(f"{self.base_url}/v1/jobs/{job_id}",
@@ -72,12 +72,12 @@ class OcrClient:
             if state == "completed":
                 break
             if state == "failed":
-                raise RuntimeError(f"paddle job {job_id} failed")
+                raise RuntimeError(f"OCR job {job_id} failed")
             if state == "canceled":
-                raise OcrJobCanceled(f"paddle job {job_id} canceled")
+                raise OcrJobCanceled(f"OCR job {job_id} canceled")
             time.sleep(2.0)
         else:
-            raise TimeoutError(f"paddle job {job_id} timed out")
+            raise TimeoutError(f"OCR job {job_id} timed out")
         result = httpx.get(f"{self.base_url}/v1/jobs/{job_id}/result",
                            timeout=60.0).json()
         pages = result.get("pages") or []
@@ -95,5 +95,5 @@ class OcrClient:
         if len(numbers) == len(chunk):
             return dict(zip(sorted(chunk), texts))
         raise RuntimeError(
-            f"paddle job {job_id} returned pages {numbers} for requested "
+            f"OCR job {job_id} returned pages {numbers} for requested "
             f"pages {chunk}")

@@ -16,8 +16,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .config import paddleocr_url
-
 
 class PDFRendererUnavailable(RuntimeError):
     pass

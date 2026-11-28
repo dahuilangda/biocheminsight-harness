@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,21 @@ _IDLE_NOTES = {
     "awaiting_perception": "All answers are in and the task is being resumed. Keep polling.",
     "pending": "The task is queued or starting; its next requests appear here. Keep polling.",
 }
+
+
+def _write_measurement_prompt(session_id: str, out_dir: str, prompt: dict) -> Path:
+    directory = Path(out_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    prefix = f"review_{session_id[:8]}_"
+    indices = (
+        int(match.group(1))
+        for path in directory.glob(f"{prefix}*.txt")
+        if (match := re.fullmatch(rf"{re.escape(prefix)}(\d+)\.txt", path.name))
+    )
+    index = max(indices, default=-1) + 1
+    path = directory / f"{prefix}{index}.txt"
+    path.write_text(json.dumps(prompt, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
 
 
 def _task_state(task_id: str) -> dict:
@@ -138,18 +154,18 @@ def create_server():
         try:
             from .config import harness_url, ocr_url
             harness_ok, harness_ms = probe(f"{harness_url().rstrip('/')}/healthz")
-            paddle_ok, paddle_ms = probe(f"{ocr_url().rstrip('/')}/healthz")
+            ocr_ok, ocr_ms = probe(f"{ocr_url().rstrip('/')}/healthz")
         except Exception:
-            harness_ok, paddle_ok = False, False
-            harness_ms = paddle_ms = 0
+            harness_ok, ocr_ok = False, False
+            harness_ms = ocr_ms = 0
         out = {"biocheminsight_url": base,
                "pipeline": pipeline_ok,
                "harness_chemistry": harness_ok,
-               "ocr_service": paddle_ok,
+               "ocr_service": ocr_ok,
                "connected": pipeline_ok,
                "roundtrip_ms": {"pipeline": pipeline_ms,
                                 "harness_chemistry": harness_ms,
-                                "ocr_service": paddle_ms}}
+                                "ocr_service": ocr_ms}}
         slow = [ms for ok, ms in ((pipeline_ok, pipeline_ms), (harness_ok, harness_ms))
                 if ok and ms > 1000]
         if slow:
@@ -667,15 +683,11 @@ def create_server():
                               timeout=60.0, verify=False)
         response.raise_for_status()
         payload = response.json()
-        session_id = payload.get("session_id")
-        prompt = payload.get("prompt")
-        if prompt:
-            path = Path(out_dir) / f"review_{session_id[:8]}_0.txt"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(prompt, ensure_ascii=False, indent=1),
-                            encoding="utf-8")
-            return {"session_id": session_id, "prompt_file": str(path)}
-        return {"session_id": session_id, "done": True}
+        session_id = payload["session_id"]
+        if payload["done"]:
+            return {"session_id": session_id, "done": True, "result": payload.get("result")}
+        path = _write_measurement_prompt(session_id, out_dir, payload["prompt"])
+        return {"session_id": session_id, "done": False, "prompt_file": str(path)}
 
     @mcp.tool()
     def measurement_review_submit(session_id: str, answer_file: str,
@@ -688,22 +700,10 @@ def create_server():
                               json={"answer": answer}, timeout=120.0, verify=False)
         response.raise_for_status()
         payload = response.json()
-        prompt = payload.get("prompt")
-        import re
-        prior = [
-            int(match.group(1))
-            for path in Path(out_dir).glob(f"review_{session_id[:8]}_*.txt")
-            if (match := re.fullmatch(
-                rf"review_{re.escape(session_id[:8])}_(\d+)\.txt", path.name))
-        ]
-        index = max(prior, default=-1) + 1
-        if prompt:
-            path = Path(out_dir) / f"review_{session_id[:8]}_{index}.txt"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(prompt, ensure_ascii=False, indent=1),
-                            encoding="utf-8")
-            return {"session_id": session_id, "next_prompt_file": str(path)}
-        return {"done": True, "result": payload.get("result")}
+        if payload["done"]:
+            return {"session_id": session_id, "done": True, "result": payload.get("result")}
+        path = _write_measurement_prompt(session_id, out_dir, payload["prompt"])
+        return {"session_id": session_id, "done": False, "next_prompt_file": str(path)}
 
     return mcp
 

@@ -32,10 +32,6 @@ def ocr_url() -> str:
                              "http://127.0.0.1:8010"))
 
 
-def paddleocr_url() -> str:
-    return ocr_url()
-
-
 def harness_url() -> str:
     return _setting("BIOCHEMINSIGHT_HARNESS_URL", "harness_url",
                     "http://127.0.0.1:8011")
@@ -59,7 +55,7 @@ def save_deployment(url: str, ocr_url: str | None = None,
     cfg["biocheminsight_url"] = url
     if ocr_url:
         cfg["ocr_url"] = ocr_url
-        cfg["paddleocr_url"] = ocr_url
+        cfg.pop("paddleocr_url", None)
     if harness_url_override:
         cfg["harness_url"] = harness_url_override
     _CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8")

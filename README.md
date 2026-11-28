@@ -93,7 +93,7 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
                   ▼                     │
 ┌──────────────────────────────────────┐
 │ BioChemInsight deployment            │
-│  pipeline · paddle VL-1.6 · review UI│
+│  pipeline · OCR · review UI│
 └──────────────────────────────────────┘
 ```
 
@@ -109,7 +109,7 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 | `mass_arbitration` | dual-convention mass check |
 | `render_pages` / `render_page` | contact sheets / single pages (local mode; the deployment renders otherwise) |
 | `extract_page_images` | native chart crops for vision reading |
-| `route_pages` | paddle/vision dispatch with quality escalation |
+| `route_pages` | Text extraction and visual review routing |
 | `record_structure_detection` | validated page decisions |
 | `record_measurement_discovery` | assay pages and names |
 | `record_assay_reconciliation` | assay-name merge/drop/rename |
@@ -123,11 +123,11 @@ See [WORKFLOW.md](WORKFLOW.md) for the full procedure.
 | `parse_sequence` / `smiles_to_sequence` | sequence chemistry via deployment |
 | `verify_structure` | visual verification of a decode vs its crop |
 | `detect_structures_on_page` | MolDetv2 bounding boxes on a rendered page |
-| `recognize_region` | MolSight recognition of a boxed region |
+| `recognize_region` | Structure recognition of a boxed region |
 | `measurement_review_start` / `measurement_review_submit` | measurement review session |
 | `task_artifact_urls` | browser URLs for finished tables |
 | `batch_fail` | release a failed batch for another worker |
-| `ocr_pages` | paddle VL-1.6 markdown |
+| `ocr_pages` | Page text as Markdown |
 | `upload_pdf` / `start_full_pipeline` / `task_status` / `task_list` / `download_task_result` | server pipeline; `task_status` carries elapsed/eta while running and the download and table links once completed |
 | `build_extraction_report` | markdown report |
 | `batch_partition` / `batch_claim` / `batch_complete` / `batch_merge` | parallel coordination |
@@ -161,7 +161,7 @@ per-table URLs. `task_list` shows the deployment's recent tasks.
 |---|---|---|
 | `BIOCHEMINSIGHT_URL` | `http://127.0.0.1:8000` | pipeline API |
 | `BIOCHEMINSIGHT_HARNESS_URL` | `http://127.0.0.1:8011` | chemistry endpoints |
-| `PADDLEOCR_URL` | `http://127.0.0.1:8010` | paddle VL-1.6 |
+| `OCR_URL` | `http://127.0.0.1:8010` | Page text extraction service |
 | `BIOCHEMINSIGHT_PERCEPTION_BATCH` | `8` | pending perception requests surfaced per poll |
 
 Persisted in `~/.biocheminsight/config.json` via `configure_deployment`;

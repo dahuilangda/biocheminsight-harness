@@ -10,6 +10,6 @@ For supported peptide notation, use `parse_peptide_notation` and `resolve_peptid
 
 ## Measurements
 
-Use `measurement_review_start` and `measurement_review_submit` for agent-driven review. Store answers outside the reserved prompt filename pattern `review_<id>_*.txt`. Follow the returned prompts and inspect the final result once the session reports completion.
+Use `measurement_review_start` and `measurement_review_submit` for agent-driven review. Store answers outside the reserved prompt filename pattern `review_<id>_*.txt`. Read the [measurement evidence rules](../references/measurement-evidence.md) before answering the first prompt. Inspect the result once the session reports completion.
 
 Join verified structures and measurements on compound identity. Carry endpoint, unit, assay context, and source page through the join. Use the [report contract](../references/report-format.md) and quantify verified coverage against the scoped rows and pages.

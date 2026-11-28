@@ -1,23 +1,10 @@
-"""Intelligent perception routing.
-
-Routes each page to the best perception backend:
-
-  agent vision  — rotated dense compound tables, complex layouts, and
-                  any page where paddle produced degenerate output
-  paddle VL-1.6 — upright prose pages, standard assay tables, pages
-                  with a clear text layer
-
-Page types come from the caller's own judgment (a misnamed type routes
-to paddle). Paddle output that fails the quality bar is escalated to
-the agent, as is a paddle chunk failure — the router adapts to what it
-is given and to what paddle actually produced.
-"""
+"""Route pages to text extraction or visual review."""
 from __future__ import annotations
 
 import re
 from typing import Any
 
-from .config import paddleocr_url
+from .config import ocr_url
 from .ocr import OcrClient, OcrJobCanceled
 
 AGENT_PAGE_TYPES = frozenset({
@@ -64,30 +51,30 @@ def batch_requests(requests: list[dict], limit: int | None = None) -> list[dict]
     return ordered[:max(1, int(limit))]
 
 class PerceptionRouter:
-    """Splits pages between paddle OCR and agent vision.
+    """Splits pages between OCR and agent vision.
 
-    Returns paddle markdowns keyed by page plus the list of pages the
+    Returns OCR Markdown keyed by page plus the list of pages the
     agent must read with its own vision."""
 
     def __init__(self, base_url: str | None = None, chunk_pages: int = 3):
         self.client = OcrClient(
-            base_url or paddleocr_url(), chunk_pages=chunk_pages)
+            base_url or ocr_url(), chunk_pages=chunk_pages)
 
     def route_pages(self, pdf_path: str, pages: list[int],
                     page_types: dict[int, str] | None = None) -> dict[str, Any]:
         page_types = page_types or {}
-        paddle_pages: list[int] = []
+        ocr_pages: list[int] = []
         agent_pages: list[int] = []
         for page in sorted(dict.fromkeys(int(p) for p in pages)):
             if page_types.get(page) in AGENT_PAGE_TYPES:
                 agent_pages.append(page)
             else:
-                paddle_pages.append(page)
+                ocr_pages.append(page)
         markdowns: dict[int, str] = {}
         failed_pages: list[int] = []
         chunk = max(1, self.client.chunk_pages)
-        for start in range(0, len(paddle_pages), chunk):
-            batch = paddle_pages[start:start + chunk]
+        for start in range(0, len(ocr_pages), chunk):
+            batch = ocr_pages[start:start + chunk]
             try:
                 markdowns.update(
                     self.client.pages_markdown(pdf_path, batch))
