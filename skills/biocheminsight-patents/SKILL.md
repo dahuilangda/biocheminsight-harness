@@ -12,12 +12,12 @@ Choose the workflow by the requested outcome.
 - Identity reconciliation, structural verification, or SAR. Read [SAR analysis](levels/L3-sar-analysis.md).
 - Inventory or compare local extraction tasks. Use the directory workflow below without starting a pipeline.
 
-Use the available deployment tools for detection, OCR, structure recognition, assembly, and validation. For agent-perception tasks, answer each request from its supplied evidence and follow its response schema.
+Use BioChemInsight for document processing, structure recognition, assembly and deterministic validation. Use the calling model to read evidence and resolve context through the agent-perception workflow. Select tools by their advertised capabilities and contracts. Deployment internals can change independently of the workflow.
 
 Retain source pages, printed IDs, units, and the distinction between a complete molecule and its assembly evidence. Retry an unreadable region with a tighter crop or higher resolution once, then report the specific uncertainty. Require row-owned attachment evidence and a validated complete graph before treating an assembled candidate as a molecule.
 
 ## Directory analysis
 
-Run `biocheminsight-stats` from the user's working directory. Pass the directory explicitly to `local_task_stats(root)` when the tool server has a different working directory. Use `--help` for sorting and `--json` for downstream analysis. The inventory reads task CSVs and ZIP exports recursively without uploading files or consulting the deployment.
+Run `biocheminsight-stats --dashboard` from the directory where the user is working. Use `--sort` to rank tasks by a measure, `--match` to narrow the scope and `--limit` to shorten the visible list. Use `--json` for further analysis. When calling `local_task_stats` through MCP, pass the user's directory explicitly if the server has a different working directory.
 
-Compare molecule, assembled, evidence, missing ID, assay, and merged row counts by task. Review source artifacts for discrepancies before drawing conclusions. The inventory skips cached downloads inside their own task folder. Identify other copies before aggregating independent runs. Compound ID counts are per task and assay counts count exported rows. Inspect scan errors and missing tables before interpreting a low count.
+The inventory reads local task records, result tables and exports recursively. Compare complete molecule rows, assemblies, review flags, unresolved rows and assay counts. A compound ID is counted once per task, while an assay count represents exported rows. Check scan errors and missing tables before interpreting counts. Identify duplicate exports before aggregating independent runs.

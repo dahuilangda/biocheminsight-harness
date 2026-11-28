@@ -15,36 +15,61 @@ STRUCTURES = "structures.csv"
 ASSAYS = ("bioactivity.csv", "assays.csv")
 MERGED = ("merged_results.csv", "merged.csv")
 ARTIFACTS = {STRUCTURES, *ASSAYS, *MERGED}
-EVIDENCE_TYPES = {"fragment", "markush", "text_substituent"}
+TASK_MARKERS = {"task_queue.jsonl", "task_steps.jsonl"}
+EVIDENCE_TYPES = {"fragment", "markush", "text_substituent", "scaffold", "attachment_fragment", "raw_fragment"}
+TRUE_VALUES = {"true", "1", "yes"}
+MISSING_IDS = {"", "none", "null", "nan", "compound"}
+METRICS = {
+    "molecule_rows": "Molecules",
+    "assembled": "Assembled",
+    "evidence_rows": "Evidence",
+    "unresolved_rows": "Unresolved",
+    "result_only_rows": "Result only",
+    "review_rows": "Review",
+    "compound_ids": "IDs",
+    "missing_ids": "Missing ID",
+    "assay_rows": "Assays",
+    "merged_rows": "Merged",
+}
+TABLE_METRICS = ("molecule_rows", "assembled", "evidence_rows", "compound_ids", "missing_ids", "assay_rows", "merged_rows")
 
 
 def _summarize(directory: str, tables: dict[str, list[dict[str, str]]]) -> dict:
     structures = tables.get(STRUCTURES, [])
-    types = Counter((row.get("STRUCTURE_TYPE") or "").strip().lower() for row in structures)
     assays = next((tables[name] for name in ASSAYS if name in tables), [])
     merged = next((tables[name] for name in MERGED if name in tables), [])
     compounds = set()
-    missing_ids = 0
+    counts: Counter[str] = Counter()
     for row in structures:
-        if (row.get("STRUCTURE_TYPE") or "").strip().lower() in EVIDENCE_TYPES:
+        kind = (row.get("STRUCTURE_TYPE") or "").strip().lower()
+        if (row.get("RESULT_ONLY") or "").strip().lower() in TRUE_VALUES:
+            counts["result_only_rows"] += 1
             continue
+        if kind in EVIDENCE_TYPES:
+            counts["evidence_rows"] += 1
+            continue
+        smiles = (row.get("SMILES") or row.get("smiles") or "").strip()
+        filtered = (row.get("FILTERED_OUT") or "").strip().lower() in TRUE_VALUES
+        if not smiles or "*" in smiles or filtered:
+            counts["unresolved_rows"] += 1
+            continue
+        counts["molecule_rows"] += 1
+        if kind == "markush_assembled":
+            counts["assembled"] += 1
+        if (row.get("LOCAL_EVIDENCE_STATUS") or "").strip().lower() in {"needs_review", "failed"}:
+            counts["review_rows"] += 1
         compound_id = (row.get("CANONICAL_COMPOUND_ID") or row.get("COMPOUND_ID")
                        or row.get("compound_id") or "").strip()
-        if compound_id.lower() in {"", "none", "null", "compound"}:
-            missing_ids += 1
+        if compound_id.lower() in MISSING_IDS:
+            counts["missing_ids"] += 1
         else:
             compounds.add(compound_id)
-    return {
-        "path": directory,
-        "tables": sorted(tables),
-        "molecule_rows": len(structures) - sum(types[kind] for kind in EVIDENCE_TYPES),
-        "assembled": types["markush_assembled"],
-        "evidence_rows": sum(types[kind] for kind in EVIDENCE_TYPES),
-        "compound_ids": len(compounds),
-        "missing_ids": missing_ids,
-        "assay_rows": len(assays),
-        "merged_rows": len(merged),
-    }
+    counts.update(compound_ids=len(compounds), assay_rows=len(assays), merged_rows=len(merged))
+    return {"path": directory, "tables": sorted(tables), **{key: counts[key] for key in METRICS}}
+
+
+def _totals(tasks: list[dict]) -> dict:
+    return {key: sum(task[key] for task in tasks) for key in METRICS}
 
 
 def scan_tasks(root: str | Path = ".") -> dict:
@@ -62,7 +87,7 @@ def scan_tasks(root: str | Path = ".") -> dict:
         folder = Path(directory)
         relative = folder.relative_to(root)
         artifacts = ARTIFACTS.intersection(filenames)
-        if artifacts:
+        if artifacts or TASK_MARKERS.intersection(filenames):
             tables = {}
             for name in sorted(artifacts):
                 try:
@@ -70,8 +95,7 @@ def scan_tasks(root: str | Path = ".") -> dict:
                         tables[name] = list(csv.DictReader(stream, strict=True))
                 except (OSError, UnicodeError, csv.Error) as exc:
                     errors.append({"path": str(relative / name), "error": str(exc)})
-            if tables:
-                tasks.append(_summarize(str(relative), tables))
+            tasks.append(_summarize(str(relative), tables))
         for filename in sorted(filenames):
             archive = folder / filename
             if archive.suffix.lower() != ".zip":
@@ -85,6 +109,8 @@ def scan_tasks(root: str | Path = ".") -> dict:
                         path = Path(item.filename)
                         if path.name in ARTIFACTS and "audit" not in path.parts[:-1]:
                             groups.setdefault(path.parent, {})[path.name] = item.filename
+                    if not groups and any(Path(name).name in TASK_MARKERS for name in bundle.namelist()):
+                        groups[Path(".")] = {}
                     for prefix, paths in groups.items():
                         tables = {}
                         for name, path in paths.items():
@@ -97,36 +123,75 @@ def scan_tasks(root: str | Path = ".") -> dict:
             except (BadZipFile, OSError, UnicodeError, csv.Error, RuntimeError, NotImplementedError) as exc:
                 errors.append({"path": str(relative / filename), "error": str(exc)})
     tasks.sort(key=lambda task: task["path"])
-    return {"root": str(root), "tasks": tasks, "errors": errors}
+    return {"root": str(root), "tasks": tasks, "totals": _totals(tasks), "errors": errors}
+
+
+def _display_path(path: str) -> str:
+    return "".join(char if char.isprintable() else "?" for char in path)
+
+
+def _table(tasks: list[dict], totals: dict) -> None:
+    columns = [(key, METRICS[key]) for key in TABLE_METRICS]
+    print(" ".join(f"{label:>10}" for _, label in columns), " Task")
+    for task in tasks:
+        print(" ".join(f"{task[key]:>10}" for key, _ in columns), "", _display_path(task["path"]))
+    print(" ".join(f"{totals[key]:>10}" for key, _ in columns), " Total")
+
+
+def _dashboard(tasks: list[dict], totals: dict, metric: str, without_tables: int, error_count: int) -> None:
+    for keys in (
+        ("molecule_rows", "assembled", "evidence_rows", "unresolved_rows", "result_only_rows"),
+        ("review_rows", "compound_ids", "missing_ids", "assay_rows", "merged_rows"),
+    ):
+        print("  ".join(f"{METRICS[key]} {totals[key]:,}" for key in keys))
+    print(f"No result tables {without_tables}  Read errors {error_count}")
+    if not tasks:
+        return
+    print()
+    print(f"{METRICS[metric]} by task")
+    maximum = max(task[metric] for task in tasks) or 1
+    for task in tasks:
+        value = task[metric]
+        width = max(1, round(24 * value / maximum)) if value else 0
+        bar = "#" * width
+        print(f"{value:>8,}  {bar:<24}  {_display_path(task['path'])}")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", nargs="?", default=".")
-    parser.add_argument("--json", action="store_true", help="emit the inventory as JSON")
-    parser.add_argument("--sort", choices=("path", "molecule_rows", "assembled", "missing_ids", "assay_rows"), default="path")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--json", action="store_true", help="emit the inventory as JSON")
+    mode.add_argument("--dashboard", action="store_true", help="show totals and rank tasks with a terminal chart")
+    parser.add_argument("--sort", choices=("path", *METRICS), help="rank tasks by a metric or sort by path")
+    parser.add_argument("--match", default="", help="include task paths containing this text")
+    parser.add_argument("--limit", type=int, help="maximum number of task rows to display")
     args = parser.parse_args()
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be positive")
     try:
         inventory = scan_tasks(args.root)
     except OSError as exc:
         parser.error(str(exc))
-    tasks = inventory["tasks"]
-    if args.sort != "path":
-        tasks.sort(key=lambda task: -task[args.sort])
+    tasks = [task for task in inventory["tasks"] if args.match.casefold() in task["path"].casefold()]
+    sort = args.sort or ("molecule_rows" if args.dashboard else "path")
+    if sort != "path":
+        tasks.sort(key=lambda task: -task[sort])
+    totals = _totals(tasks)
+    without_tables = sum(not task["tables"] for task in tasks)
+    display = tasks[:args.limit]
     if args.json:
+        inventory.update(tasks=display, totals=totals, task_count=len(tasks), tasks_without_tables=without_tables)
         print(json.dumps(inventory, ensure_ascii=False, indent=2))
         return 0
-    columns = (("molecule_rows", "Molecules"), ("assembled", "Assembled"),
-               ("evidence_rows", "Evidence"), ("compound_ids", "IDs"),
-               ("missing_ids", "Missing ID"), ("assay_rows", "Assays"), ("merged_rows", "Merged"))
     print(f"{len(tasks)} tasks in {inventory['root']}")
-    if tasks:
-        print(" ".join(f"{label:>10}" for _, label in columns), " Task")
-        for task in tasks:
-            path = "".join(char if char.isprintable() else "?" for char in task["path"])
-            print(" ".join(f"{task[key]:>10}" for key, _ in columns), "", path)
-        totals = {key: sum(task[key] for task in tasks) for key, _ in columns}
-        print(" ".join(f"{totals[key]:>10}" for key, _ in columns), " Total")
+    if len(display) < len(tasks):
+        print(f"Showing {len(display)} tasks. Totals cover all matching tasks.")
+    if args.dashboard:
+        metric = sort if sort != "path" else "molecule_rows"
+        _dashboard(display, totals, metric, without_tables, len(inventory["errors"]))
+    elif display:
+        _table(display, totals)
     for error in inventory["errors"]:
         print(f"{error['path']!r}: {error['error']!r}", file=sys.stderr)
     return 0

@@ -16,7 +16,7 @@ from . import ocr as ocr_mod
 from . import pages as pages_mod
 from . import report
 from . import sar as sar_mod
-from .config import biocheminsight_url, harness_url, paddleocr_url
+from .config import biocheminsight_url, harness_url
 from . import frontend
 
 _IDLE_NOTES = {
@@ -74,13 +74,12 @@ def _eta_seconds(sample, status: str, progress: float) -> int | None:
     return remaining or None
 
 
-def _result_links(task_id: str) -> dict:
+def _result_links(task_id: str, task_type: str) -> dict:
     """Download links for a finished run."""
     from .config import biocheminsight_url
     base = biocheminsight_url().rstrip("/")
     return {"download_url": f"{base}/api/tasks/{task_id}/download",
-            "tables": {name: f"{base}/api/tasks/{task_id}/{name}"
-                       for name in ("structures", "assays", "merged", "sar")}}
+            "tables": frontend.task_table_urls(task_id, task_type)}
 
 
 def _pending_perception(task_id: str) -> tuple[list[dict], int]:
@@ -330,10 +329,7 @@ def create_server():
     @mcp.tool()
     def start_full_pipeline(pdf_id: str, strictness: str = "strict",
                             assemble_markush: bool = True) -> str:
-        """Start the extraction pipeline in agent-perception mode: the
-        connected coding agent (you) answers every vision call. The task
-        pauses at awaiting_perception when requests are pending and
-        resumes automatically once you answer them."""
+        """Run extraction with the calling agent answering image and text perception requests."""
         from .client import BioChemInsightClient
         client = BioChemInsightClient()
         with client.http:
@@ -370,7 +366,7 @@ def create_server():
         if eta is not None:
             out["eta_seconds"] = eta
         if status == "completed":
-            out["result"] = _result_links(task_id)
+            out["result"] = _result_links(task_id, task.get("type", ""))
         requests, pending = _pending_perception(task_id)
         if requests or pending:
             out["awaiting_perception"] = {"pending": pending, "requests": requests}
@@ -465,7 +461,7 @@ def create_server():
 
     @mcp.tool()
     def local_task_stats(root: str = ".") -> dict:
-        """Summarize extracted task folders and result archives under an explicit local path."""
+        """Inventory local tasks and result archives under the supplied workspace path."""
         from .task_stats import scan_tasks
         return scan_tasks(root)
 
@@ -476,9 +472,7 @@ def create_server():
 
     @mcp.tool()
     def task_tables(task_id: str, table: str = "structures") -> list[dict]:
-        """Read a finished run's table inline: structures, assays, merged
-        or sar. Returns the CSV rows as objects — no file download
-        needed for quick inspection."""
+        """Read structure, assay, joined, or SAR records from a finished task."""
         import httpx as _httpx
         from .config import biocheminsight_url
         allowed = {"structures", "assays", "merged", "sar"}
@@ -489,7 +483,11 @@ def create_server():
             timeout=60.0, verify=False)
         r.raise_for_status()
         payload = r.json()
-        return payload.get("rows") or payload.get(table) or payload.get("results") or []
+        for key in ("records", "rows", "units" if table == "sar" else table, "results"):
+            rows = payload.get(key)
+            if isinstance(rows, list):
+                return rows
+        raise ValueError(f"Unexpected {table} response: missing records")
 
     @mcp.tool()
     def cancel_task(task_id: str) -> dict:
@@ -591,18 +589,15 @@ def create_server():
 
     @mcp.tool()
     def open_review_workspace(task_id: str) -> dict:
-        from .frontend import review_workspace_url
-        return {"url": review_workspace_url(task_id), "task_id": task_id}
+        task = _task_state(task_id)
+        return {"url": frontend.review_workspace_url(task_id, task.get("pdf_id", ""), task.get("type", "")),
+                "task_id": task_id}
 
     @mcp.tool()
     def task_artifact_urls(task_id: str) -> dict:
-        """Browser URLs for the finished run's structures, assays and
-        merged-relationship tables."""
-        from . import frontend
-        return {"task_id": task_id,
-                "structures": frontend.structures_url(task_id),
-                "assays": frontend.assays_url(task_id),
-                "merged": frontend.merged_url(task_id)}
+        """Browser URLs for the tables provided by this task."""
+        task = _task_state(task_id)
+        return {"task_id": task_id, **frontend.task_table_urls(task_id, task.get("type", ""))}
 
     @mcp.tool()
     def batch_partition(run_dir: str, total_pages: int,

@@ -136,7 +136,7 @@ def test_a_completed_task_returns_download_and_table_links(monkeypatch):
     out = _status(server)
 
     assert out["result"]["download_url"] == "https://deploy.example/api/tasks/t1/download"
-    assert sorted(out["result"]["tables"]) == ["assays", "merged", "sar", "structures"]
+    assert sorted(out["result"]["tables"]) == ["assays", "sar", "structures"]
     assert out["result"]["tables"]["structures"] == "https://deploy.example/api/tasks/t1/structures"
 
 
@@ -161,3 +161,35 @@ def test_task_list_trims_each_task_and_filters_by_status(monkeypatch):
     assert [task["task_id"] for task in out["tasks"]] == ["t1", "t2"]
     assert set(out["tasks"][0]) == {"task_id", "type", "status", "progress",
                                     "message", "updated_at"}
+
+
+@pytest.mark.parametrize(("table", "key"), [
+    ("structures", "records"),
+    ("assays", "records"),
+    ("merged", "records"),
+    ("sar", "units"),
+])
+def test_task_tables_reads_deployment_records(monkeypatch, table, key):
+    row = {"COMPOUND_ID": "A", "PAGE_NUM": 14}
+    server = _session(monkeypatch, lambda request: httpx.Response(200, json={key: [row]}),
+                      lambda request: httpx.Response(500))
+    result = _run(_call(server, "task_tables", {"task_id": "t1", "table": table}))
+    assert not result.isError
+    assert json.loads(result.content[0].text) == row
+
+
+@pytest.mark.parametrize(("task_type", "parameter"), [
+    ("structure_extraction", "structureTask"),
+    ("full_pipeline", "fullPipelineTask"),
+])
+def test_open_review_workspace_restores_pdf_and_task(monkeypatch, task_type, parameter):
+    from urllib.parse import parse_qs, urlsplit
+
+    task = _task(status="completed", pdf_id="pdf-1", type=task_type, progress=1)
+    server = _session(monkeypatch, lambda request: httpx.Response(200, json=task),
+                      lambda request: httpx.Response(500))
+    result = _run(_call(server, "open_review_workspace", {"task_id": "t1"}))
+    assert not result.isError
+    url = urlsplit(json.loads(result.content[0].text)["url"])
+    assert url.path == "/"
+    assert parse_qs(url.query) == {"pdf": ["pdf-1"], parameter: ["t1"], "step": ["4"]}

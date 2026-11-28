@@ -28,7 +28,7 @@ class BioChemInsightClient:
                             structure_filter_strictness: str = "strict",
                             assemble_markush: bool = True,
                             lang: str = "en", *,
-                            perception_provider: Literal["agent", "gemma"] = "agent") -> str:
+                            perception_provider: Literal["agent", "deployment"] = "agent") -> str:
         response = self.http.post(
             f"{self.base_url}/api/tasks/full-pipeline",
             json={"pdf_id": pdf_id,

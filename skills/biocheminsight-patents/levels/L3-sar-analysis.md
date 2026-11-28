@@ -4,7 +4,7 @@
 
 Reconcile the source identifier, graph, and measurement context. Link assays through verified compound identity, preserving the original label. Keep repeated or conflicting IDs unresolved until page and row evidence disambiguates them. Use `verify_extraction` for independent readings and `verify_dual_source` for independent graph readings.
 
-For Markush assembly, confirm the scaffold, site labels, and row-owned substituents. Inspect the completed graph and its provenance. Surface blocked assignments and graph conflicts in the report.
+For Markush assembly, trace the scaffold and each substituent to its own page and source region. Follow the table across pages and check that the row identifier and variable label still apply. Compare both ends of each attachment and the bond order with the source. Check the assembled graph for unresolved sites, changed stereochemistry and undeclared atoms. Use an independently stated full structure or name when present. Report conflicting or unreadable evidence as a gap and keep it out of verified joins.
 
 For supported peptide notation, use `parse_peptide_notation` and `resolve_peptide_notation`. Supply only reported mass evidence, using `ion_mz` and `ion_charge` together when stated as an ion measurement. Record the tool verdict, mass convention, delta, and unresolved tokens. Treat mass agreement as a consistency check. Preserve the source's stereochemistry and terminal markers.
 
