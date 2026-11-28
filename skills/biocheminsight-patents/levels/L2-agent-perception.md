@@ -4,6 +4,6 @@ Use [page taxonomy](../references/page-taxonomy.md) to choose source pages. A pa
 
 Use text extraction for selected pages and render the relevant regions when reading the layout matters. Review proposed structure boxes in page context before requesting recognition on confirmed regions. Compare the returned graph with the drawing through the available structure verification capability.
 
-Read compound labels in page context, including labels outside the tight structure crop. Check that attachment symbols are drawn within the source region before treating them as open sites. Record uncertainty where page context, OCR, and a crop disagree.
+For compound IDs and names, follow [compound identity evidence](../references/compound-identity.md). Check that attachment symbols are drawn within the source region before treating them as open sites. Record uncertainty where page context, OCR, and a crop disagree.
 
 When a page contains activity or ADME results, use the [measurement evidence rules](../references/measurement-evidence.md) to read the result region.

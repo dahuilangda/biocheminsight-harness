@@ -19,6 +19,7 @@ from . import report
 from . import sar as sar_mod
 from .config import biocheminsight_url, harness_url
 from . import frontend
+from . import identity
 
 _IDLE_NOTES = {
     "awaiting_perception": "All answers are in and the task is being resumed. Keep polling.",
@@ -197,6 +198,17 @@ def create_server():
         resolution so you can read them with your own vision."""
         return [str(path) for path in pages_mod.extract_page_images(
             pdf_path, pages, out_dir)]
+
+    @mcp.tool()
+    def read_compound_labels(
+        pdf_path: str, page: int, boxes: list[tuple[float, float, float, float]],
+    ) -> dict:
+        """Read numbered labels for structure boxes from the PDF text layer.
+
+        Page numbers are one-based. Boxes use normalized left, top, right,
+        bottom coordinates on the rendered page. Labels follow box order.
+        """
+        return identity.read_compound_labels(pdf_path, page, boxes)
 
     @mcp.tool()
     def record_structure_detection(out_path: str,
